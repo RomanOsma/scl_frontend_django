@@ -1,0 +1,51 @@
+<!-- scl_frontend_django/templates/portal/category_list.html -->
+{% extends "base.html" %}
+
+{% block title %}Lista de Categorías - SCL Inventory{% endblock title %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1>Lista de Categorías</h1>
+        <a href="{% url 'portal:category_add' %}" class="btn btn-primary">Añadir Nueva Categoría</a>
+    </div>
+
+    {% if api_error %}
+        <div class="alert alert-danger" role="alert">
+            <strong>Error de API:</strong> {{ api_error }}
+        </div>
+    {% endif %}
+
+    {% if categories %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th scope="col">ID</th>
+                        <th scope="col">Nombre</th>
+                        <th scope="col">Descripción</th>
+                        <th scope="col">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for category in categories %}
+                    <tr>
+                        <th scope="row">{{ category.id }}</th>
+                        <td>{{ category.name }}</td>
+                        <td>{{ category.description|default:"N/A" }}</td>
+                        <td>
+                            <a href="#" class="btn btn-sm btn-warning me-1">Editar (Próx.)</a>
+                            <a href="#" class="btn btn-sm btn-danger">Eliminar (Próx.)</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% elif not api_error %}
+        <div class="alert alert-info" role="alert">
+            No hay categorías para mostrar. Puedes <a href="{% url 'portal:category_add' %}" class="alert-link">añadir una nueva</a>.
+        </div>
+    {% endif %}
+</div>
+{% endblock content %}

@@ -530,5 +530,62 @@ def category_create_view(request):
     # o podrías crear una category_form.html muy similar.
     return render(request, 'portal/category_form.html', context) # Usaremos una nueva plantilla
 
+def category_list_view(request):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username')
+
+    # Aunque el GET de categorías es público, verificamos el token
+    # para mantener un flujo consistente para las páginas de gestión.
+    if not auth_token:
+        messages.warning(request, 'Por favor, inicia sesión para ver las categorías.')
+        return redirect('portal:login')
+
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    if not fastapi_base_url:
+        messages.error(request, "Error de configuración: URL de la API no definida.")
+        return render(request, 'portal/category_list.html', {
+            'current_username': current_username,
+            'categories': [],
+            'api_error': "Error de configuración interna (URL de API no encontrada)."
+        })
+
+    api_categories_url = f"{fastapi_base_url}/categories/"
+    headers = {'Authorization': f'Bearer {auth_token}'} # Enviamos token por si se protege en el futuro
+    
+    categories_list = []
+    api_error_message = None
+
+    try:
+        # Podríamos añadir paginación aquí también con params={'skip': ..., 'limit': ...}
+        response = requests.get(api_categories_url, headers=headers, params={'limit': 500}) # Traer bastantes
+        response.raise_for_status()
+        categories_list = response.json()
+    except requests.exceptions.HTTPError as e_http:
+        # ... (Manejo de errores similar al de dashboard_view o product_detail_view) ...
+        if e_http.response is not None:
+            if e_http.response.status_code == 401:
+                api_error_message = "Tu sesión ha expirado. Por favor, inicia sesión de nuevo."
+                if 'auth_token' in request.session: del request.session['auth_token']
+                if 'username' in request.session: del request.session['username']
+                messages.error(request, api_error_message)
+                return redirect('portal:login')
+            else:
+                api_error_message = f"Error ({e_http.response.status_code}) al obtener las categorías."
+        else:
+            api_error_message = "Error de HTTP sin respuesta al obtener categorías."
+        messages.error(request, api_error_message)
+    except requests.exceptions.RequestException as e_req:
+        api_error_message = f"Error de red al obtener categorías: {e_req}"
+        messages.error(request, api_error_message)
+    except Exception as e_gen:
+        api_error_message = f"Un error inesperado ocurrió: {e_gen}"
+        messages.error(request, api_error_message)
+
+    context = {
+        'categories': categories_list,
+        'current_username': current_username,
+        'api_error': api_error_message
+    }
+    return render(request, 'portal/category_list.html', context)
 
 

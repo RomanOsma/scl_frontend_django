@@ -13,7 +13,8 @@ urlpatterns = [
     path('product/add/', views.product_create_view, name='product_add'),
     path('product/<int:product_id>/edit/', views.product_update_view, name='product_edit'),
     path('product/<int:product_id>/delete/', views.product_delete_view, name='product_delete'),
-    path('category/add/', views.category_create_view, name='category_add'), # ¡NUEVA RUTA!
+    path('category/add/', views.category_create_view, name='category_add'),
+    path('categories/', views.category_list_view, name='category_list'), # ¡NUEVA RUTA!!
     # Podríamos tener una vista para la raíz de la app portal, por ejemplo, que redirija al dashboard si está logueado
     # o al login si no lo está. O simplemente usar el dashboard como la "página de inicio" de la app.
     # path('', views.index_view, name='index'), 
