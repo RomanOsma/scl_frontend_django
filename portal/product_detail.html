@@ -1,0 +1,50 @@
+<!-- scl_frontend_django/templates/portal/product_detail.html -->
+{% extends "base.html" %}
+
+{% block title %}
+    {% if product %}
+        Detalle: {{ product.name }}
+    {% else %}
+        Detalle de Producto
+    {% endif %}
+    - SCL Inventory
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-4">
+    {% if api_error %}
+        <div class="alert alert-danger" role="alert">
+            <strong>Error de API:</strong> {{ api_error }}
+        </div>
+        <a href="{% url 'portal:dashboard' %}" class="btn btn-primary">Volver al Dashboard</a>
+    {% elif product %}
+        <h1>{{ product.name }}</h1>
+        <hr>
+        <div class="row">
+            <div class="col-md-8">
+                <p><strong>Descripción:</strong> {{ product.description|default:"No disponible" }}</p>
+                <p><strong>Categoría:</strong> {{ product.category.name|default:"Sin categoría" }}</p>
+                <p><strong>Precio:</strong> ${{ product.price|floatformat:2 }}</p>
+                <p><strong>Stock Actual:</strong> {{ product.stock_actual }} unidades</p>
+                <p><strong>Stock Mínimo:</strong> {{ product.stock_minimo }} unidades</p>
+                <p><strong>SKU:</strong> {{ product.codigo_sku|default:"N/A" }}</p>
+                <p><strong>Número de Serie:</strong> {{ product.numero_serie|default:"N/A" }}</p>
+                <!-- Podríamos mostrar el proveedor si lo incluyéramos en la respuesta de la API -->
+                <!-- <p><strong>Proveedor:</strong> {{ product.proveedor.nombre|default:"N/A" }}</p> -->
+            </div>
+            <!-- Podríamos tener una columna para imagen del producto si existiera -->
+            <!-- <div class="col-md-4">
+                <img src="URL_IMAGEN_PRODUCTO" class="img-fluid" alt="{{ product.name }}">
+            </div> -->
+        </div>
+        <hr>
+        <a href="{% url 'portal:dashboard' %}" class="btn btn-secondary me-2">Volver al Dashboard</a>
+        <a href="#" class="btn btn-warning">Editar Producto (Próximamente)</a>
+    {% else %}
+        <div class="alert alert-warning" role="alert">
+            No se pudo cargar la información del producto.
+        </div>
+        <a href="{% url 'portal:dashboard' %}" class="btn btn-primary">Volver al Dashboard</a>
+    {% endif %}
+</div>
+{% endblock content %}
