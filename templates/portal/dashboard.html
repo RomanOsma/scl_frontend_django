@@ -1,0 +1,24 @@
+<!-- scl_frontend_django/templates/portal/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SCL Inventory{% endblock title %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col">
+            <h1>Bienvenido al Dashboard, {{ current_username|default:"Usuario" }}!</h1>
+            <p>Esta es tu página de inicio después de iniciar sesión.</p>
+            <p>Desde aquí podrás gestionar el inventario (próximamente).</p>
+            
+            {% if request.session.auth_token %}
+                <p>Tu token de autenticación está activo.</p>
+                <!-- No mostrar el token directamente por seguridad, solo para depuración si es necesario -->
+                <!-- <p><small>Token: {{ request.session.auth_token|truncatechars:30 }}...</small></p> -->
+            {% endif %}
+
+            <a href="#" class="btn btn-info mt-3">Ver Productos (Próximamente)</a>
+        </div>
+    </div>
+</div>
+{% endblock content %}
