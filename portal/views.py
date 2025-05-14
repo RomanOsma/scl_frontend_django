@@ -2,9 +2,9 @@
 
 import requests
 import os
-from django.shortcuts import render, redirect
+from django.shortcuts import render, redirect, get_object_or_404 # Añadido get_object_or_404 (aunque no lo usaremos directamente aquí con la API)
 from django.contrib import messages
-from .forms import LoginForm, ProductForm # Asegúrate de importar ProductForm
+from .forms import LoginForm, ProductForm
 
 # --- Vista de Login ---
 def login_view(request):
@@ -136,6 +136,7 @@ def dashboard_view(request):
     }
     return render(request, 'portal/dashboard.html', context)
 
+
 # --- Vista de Detalle del Producto ---
 def product_detail_view(request, product_id):
     auth_token = request.session.get('auth_token')
@@ -193,6 +194,7 @@ def product_detail_view(request, product_id):
     }
     return render(request, 'portal/product_detail.html', context)
 
+
 # --- Vista para Crear un Nuevo Producto ---
 def product_create_view(request):
     auth_token = request.session.get('auth_token')
@@ -209,9 +211,6 @@ def product_create_view(request):
 
     api_products_url = f"{fastapi_base_url}/products/"
     headers = {'Authorization': f'Bearer {auth_token}'}
-    
-    # Para el método GET, pasamos el token al formulario para que pueda cargar las categorías
-    # Para el método POST, también, por si hay errores y se vuelve a renderizar el formulario
     form_kwargs = {'api_auth_token': auth_token}
 
     if request.method == 'POST':
@@ -219,28 +218,25 @@ def product_create_view(request):
         if form.is_valid():
             product_data_to_send = form.cleaned_data.copy()
             
-            if not product_data_to_send.get('category_id'): # Si category_id es '' o None
+            if not product_data_to_send.get('category_id'):
                 product_data_to_send['category_id'] = None
-            else: # Asegurarse de que es un entero si se seleccionó algo
+            else:
                 try:
                     product_data_to_send['category_id'] = int(product_data_to_send['category_id'])
                 except (ValueError, TypeError):
-                    product_data_to_send['category_id'] = None # O manejar como error de formulario
+                    product_data_to_send['category_id'] = None
 
-            # Convertir DecimalField de Django a float para la API si es necesario
             if 'price' in product_data_to_send and product_data_to_send['price'] is not None:
                  product_data_to_send['price'] = float(product_data_to_send['price'])
-            else: # Si el precio no es obligatorio y no se envía
-                product_data_to_send.pop('price', None) # Eliminar si no se requiere o la API espera null
+            else:
+                product_data_to_send.pop('price', None)
 
             try:
                 response = requests.post(api_products_url, json=product_data_to_send, headers=headers)
                 response.raise_for_status()
-                
                 new_product_api_response = response.json()
                 messages.success(request, f"Producto '{new_product_api_response.get('name')}' creado exitosamente.")
                 return redirect('portal:dashboard')
-
             except requests.exceptions.HTTPError as e_http:
                 error_message = "Error al crear el producto en la API."
                 if e_http.response is not None:
@@ -263,14 +259,132 @@ def product_create_view(request):
             except requests.exceptions.RequestException as e_req:
                 messages.error(request, f"Error de red al crear el producto: {e_req}")
             except Exception as e_gen:
-                messages.error(request, f"Un error inesperado ocurrió: {e_gen}")
-            # Si hay error, el 'form' ya está poblado con request.POST, se volverá a renderizar
-    else: # Petición GET
-        form_kwargs = {'api_auth_token': auth_token} # Definimos el diccionario
-        form = ProductForm(**form_kwargs) # Desempaquetamos el diccionario
+                messages.error(request, f"Un error inesperado ocurrió creando producto: {e_gen}")
+    else: 
+        form = ProductForm(**form_kwargs)
 
     context = {
         'form': form,
+        'is_editing': False, # Para la plantilla, indicar que es creación
+        'current_username': current_username
+    }
+    return render(request, 'portal/product_form.html', context)
+
+
+# --- Vista para Actualizar un Producto Existente ---
+def product_update_view(request, product_id):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username')
+
+    if not auth_token:
+        messages.error(request, 'Debes iniciar sesión para editar un producto.')
+        return redirect('portal:login')
+
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    if not fastapi_base_url:
+        messages.error(request, "Error de configuración: URL de la API no definida.")
+        return redirect('portal:dashboard')
+
+    api_product_url = f"{fastapi_base_url}/products/{product_id}/"
+    headers = {'Authorization': f'Bearer {auth_token}'}
+    form_kwargs = {'api_auth_token': auth_token}
+    
+    # Obtener datos del producto para pre-rellenar el formulario (si es GET)
+    # o para tener una instancia base si el POST falla la validación
+    product_instance_data = None
+    try:
+        response_get = requests.get(api_product_url, headers=headers)
+        response_get.raise_for_status()
+        product_instance_data = response_get.json()
+    except requests.exceptions.RequestException as e:
+        messages.error(request, f"No se pudo obtener el producto a editar: {e}")
+        return redirect('portal:dashboard')
+    except Exception as e: # Captura cualquier otro error, como JSONDecodeError si la respuesta no es JSON
+        messages.error(request, f"Error inesperado al obtener producto para editar: {e}")
+        return redirect('portal:dashboard')
+
+    if not product_instance_data: # Doble chequeo
+        messages.error(request, f"Producto con ID {product_id} no encontrado para editar.")
+        return redirect('portal:dashboard')
+
+    if request.method == 'POST':
+        form = ProductForm(request.POST, **form_kwargs) # Validar los datos enviados
+        if form.is_valid():
+            product_data_to_send = form.cleaned_data.copy()
+
+            if not product_data_to_send.get('category_id'):
+                product_data_to_send['category_id'] = None
+            else:
+                try:
+                    product_data_to_send['category_id'] = int(product_data_to_send['category_id'])
+                except (ValueError, TypeError):
+                    product_data_to_send['category_id'] = None
+            
+            if 'price' in product_data_to_send and product_data_to_send['price'] is not None:
+                 product_data_to_send['price'] = float(product_data_to_send['price'])
+            else:
+                product_data_to_send.pop('price', None)
+            
+            # La API PUT espera todos los campos que se pueden modificar,
+            # pero nuestro ProductUpdate schema en FastAPI permite campos opcionales.
+            # Solo enviamos lo que está en el cleaned_data del formulario.
+            # Si la API FastAPI usa un schema PATCH-like para PUT, esto funcionará bien.
+            # Si la API FastAPI espera TODOS los campos en PUT, entonces necesitaríamos
+            # fusionar product_instance_data con product_data_to_send aquí.
+            # Por ahora, asumimos que la API maneja actualizaciones parciales en PUT.
+
+            try:
+                response_put = requests.put(api_product_url, json=product_data_to_send, headers=headers)
+                response_put.raise_for_status()
+                
+                updated_product_api_response = response_put.json()
+                messages.success(request, f"Producto '{updated_product_api_response.get('name')}' actualizado exitosamente.")
+                return redirect('portal:product_detail', product_id=product_id) # Redirigir al detalle del producto actualizado
+
+            except requests.exceptions.HTTPError as e_http:
+                error_message = "Error al actualizar el producto en la API."
+                # (Mismo manejo de errores que en create_view)
+                if e_http.response is not None:
+                    try:
+                        api_error_details = e_http.response.json().get('detail')
+                        if isinstance(api_error_details, list):
+                            readable_errors = []
+                            for error_item in api_error_details:
+                                loc = " -> ".join(map(str, error_item.get('loc', ['body'])))
+                                msg = error_item.get('msg', 'Error desconocido')
+                                readable_errors.append(f"Campo '{loc}': {msg}")
+                            error_message = "Error de validación de la API: " + "; ".join(readable_errors)
+                        elif isinstance(api_error_details, str):
+                             error_message = f"Error de API: {api_error_details}"
+                        else:
+                            error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
+                    except requests.exceptions.JSONDecodeError:
+                        error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
+                messages.error(request, error_message)
+            except requests.exceptions.RequestException as e_req:
+                messages.error(request, f"Error de red al actualizar el producto: {e_req}")
+            except Exception as e_gen:
+                messages.error(request, f"Un error inesperado ocurrió actualizando producto: {e_gen}")
+            # Si hay error, el 'form' ya está poblado con request.POST, se volverá a renderizar
+    else: # Petición GET
+        # Pre-rellenar el formulario con los datos del producto existente
+        # Asegurarse de que los nombres de los campos coincidan con los del ProductForm
+        initial_data = {
+            'name': product_instance_data.get('name'),
+            'description': product_instance_data.get('description'),
+            'price': product_instance_data.get('price'),
+            'stock_actual': product_instance_data.get('stock_actual'),
+            'stock_minimo': product_instance_data.get('stock_minimo'),
+            'codigo_sku': product_instance_data.get('codigo_sku'),
+            'numero_serie': product_instance_data.get('numero_serie'),
+            'category_id': product_instance_data.get('category', {}).get('id') if product_instance_data.get('category') else None
+        }
+        form = ProductForm(initial=initial_data, **form_kwargs)
+
+    context = {
+        'form': form,
+        'is_editing': True, # Para la plantilla, indicar que es edición
+        'product_id': product_id, # Para la URL del action del form si es necesario, o para título
         'current_username': current_username
     }
     return render(request, 'portal/product_form.html', context)

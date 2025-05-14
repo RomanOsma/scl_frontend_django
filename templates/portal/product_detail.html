@@ -39,7 +39,8 @@
         </div>
         <hr>
         <a href="{% url 'portal:dashboard' %}" class="btn btn-secondary me-2">Volver al Dashboard</a>
-        <a href="#" class="btn btn-warning">Editar Producto (Próximamente)</a>
+        <a href="{% url 'portal:dashboard' %}" class="btn btn-secondary me-2">Volver al Dashboard</a>
+        <a href="{% url 'portal:product_edit' product_id=product.id %}" class="btn btn-warning">Editar Producto</a> {# ¡MODIFICADO! #}
     {% else %}
         <div class="alert alert-warning" role="alert">
             No se pudo cargar la información del producto o el producto no existe.

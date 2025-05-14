@@ -1,7 +1,15 @@
 <!-- scl_frontend_django/templates/portal/product_form.html -->
 {% extends "base.html" %}
+{% load static %} {# Buena práctica, aunque base.html ya lo carga #}
 
-{% block title %}Añadir Nuevo Producto - SCL Inventory{% endblock title %}
+{% block title %}
+    {% if form.instance.pk %} {# Chequea si el formulario está ligado a una instancia existente (para editar) #}
+        Editar Producto: {{ form.instance.name }}
+    {% else %}
+        Añadir Nuevo Producto
+    {% endif %}
+    - SCL Inventory
+{% endblock title %}
 
 {% block content %}
 <div class="container mt-4">
@@ -9,8 +17,58 @@
         <div class="col-md-8 col-lg-6">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h2 class="card-title text-center mb-4">Añadir Nuevo Producto</h2>
-                    <form method="post" nov# Podrías añadir un choice de error o dejarlo vacío
-                    categories_choices.append(('', 'Error al cargar categorías'))
-            
-        self.fields['category_id'].choices = categories_choices
+                    <h2 class="card-title text-center mb-4">
+                        {% if form.instance.pk %}
+                            Editar Producto
+                        {% else %}
+                            Añadir Nuevo Producto
+                        {% endif %}
+                    </h2>
+
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}info{% endif %} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <form method="post" novalidate> {# novalidate para que Django maneje la validación del lado del servidor #}
+                        {% csrf_token %}
+                        
+                        {# Renderizar campos del formulario (puedes hacerlo campo por campo para más control) #}
+                        {{ form.as_p }} {# Esto renderiza cada campo como un párrafo <p> #}
+                        
+                        {# Alternativamente, para más control (ejemplo con un campo):
+                        <div class="mb-3">
+                            {{ form.name.label_tag }}
+                            {{ form.name }}
+                            {% if form.name.help_text %}
+                                <small class="form-text text-muted">{{ form.name.help_text|safe }}</small>
+                            {% endif %}
+                            {% for error in form.name.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ error }}
+                                </div>
+                            {% endfor %}
+                        </div>
+                        #}
+                        
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-primary">
+                                {% if form.instance.pk %}
+                                    Actualizar Producto
+                                {% else %}
+                                    Guardar Producto
+                                {% endif %}
+                            </button>
+                            <a href="{% url 'portal:dashboard' %}" class="btn btn-secondary">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %} {# ¡ASEGÚRATE DE QUE ESTE CIERRE DE BLOQUE EXISTA! #}
