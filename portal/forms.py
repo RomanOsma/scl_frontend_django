@@ -73,8 +73,14 @@ class ProductForm(forms.Form):
     # proveedor_id = forms.IntegerField(label="ID de Proveedor (Opcional)", required=False)
 
     def __init__(self, *args, **kwargs):
-        # Podríamos pasar una lista de opciones de categorías aquí si las obtenemos de la API
-        # category_choices = kwargs.pop('category_choices', None)
-        super().__init__(*args, **kwargs)
-        # if category_choices:
-        #     self.fields['category_id'].choices = category_choices
+        # El token y la lista de categorías se pasarán desde la vista al instanciar el formulario
+        api_auth_token = kwargs.pop('api_auth_token', None) # <--- AQUÍ
+        super().__init__(*args, **kwargs) # <--- PROBLEMA AQUÍ
+        
+        # Cargar categorías dinámicamente desde la API FastAPI
+        categories_choices = [('', '---------')]
+        if api_auth_token:
+            # ... lógica para cargar categorías ...
+            pass # Solo para el ejemplo de la estructura
+        
+        self.fields['category_id'].choices = categories_choices

@@ -266,7 +266,8 @@ def product_create_view(request):
                 messages.error(request, f"Un error inesperado ocurrió: {e_gen}")
             # Si hay error, el 'form' ya está poblado con request.POST, se volverá a renderizar
     else: # Petición GET
-        form = ProductForm(**form_kwargs) # Pasa el token al inicializar para cargar categorías
+        form_kwargs = {'api_auth_token': auth_token} # Definimos el diccionario
+        form = ProductForm(**form_kwargs) # Desempaquetamos el diccionario
 
     context = {
         'form': form,
