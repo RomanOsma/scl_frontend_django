@@ -200,5 +200,5 @@ def product_detail_view(request, product_id):
         'api_error': api_error_message,
         'current_username': request.session.get('username')
     }
-    # return render(request, 'portal/product_detail.html', context) # Comentado
-    return render(request, 'portal/test_p_detail.html', context) # Línea de prueba
+    return render(request, 'portal/product_detail.html', context) # Comentado
+    # return render(request, 'portal/test_p_detail.html', context) # Línea de prueba
