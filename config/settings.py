@@ -10,11 +10,22 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+# scl_frontend_django/config/settings.py
 import os
 from pathlib import Path
+from dotenv import load_dotenv # Asegúrate que esta importación está
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Cargar variables de entorno del archivo .env en la raíz del proyecto
+dotenv_path = os.path.join(BASE_DIR, '.env')
+if os.path.exists(dotenv_path):
+    load_dotenv(dotenv_path)
+    print(f"ARCHIVO .env CARGADO DESDE: {dotenv_path}") # Añade este print
+    print(f"FASTAPI_BASE_URL DESDE settings.py (después de load_dotenv): {os.getenv('FASTAPI_BASE_URL')}") # Y este otro
+else:
+    print(f"ADVERTENCIA: No se encontró el archivo .env en {dotenv_path}")
 
 
 # Quick-start development settings - unsuitable for production

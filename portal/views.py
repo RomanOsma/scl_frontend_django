@@ -13,6 +13,7 @@ def login_view(request):
             username = form.cleaned_data.get('username')
             password = form.cleaned_data.get('password')
             
+            print(f"Intentando obtener FASTAPI_BASE_URL. Valor actual: '{os.getenv('FASTAPI_BASE_URL')}'") # Línea de depuración
             # Leer la URL base de la API FastAPI desde las variables de entorno
             fastapi_url = os.getenv('FASTAPI_BASE_URL') # ¡CAMBIADO!
             if not fastapi_url:
