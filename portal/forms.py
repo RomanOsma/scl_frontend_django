@@ -84,3 +84,15 @@ class ProductForm(forms.Form):
             pass # Solo para el ejemplo de la estructura
         
         self.fields['category_id'].choices = categories_choices
+
+class CategoryForm(forms.Form):
+    name = forms.CharField(
+        label="Nombre de la Categoría",
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Smartphones, Laptops'})
+    )
+    description = forms.CharField(
+        label="Descripción (Opcional)",
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Una breve descripción de la categoría'}),
+        required=False
+    )

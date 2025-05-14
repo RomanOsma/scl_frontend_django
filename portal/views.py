@@ -3,7 +3,7 @@ import requests
 import os
 from django.shortcuts import render, redirect, get_object_or_404 # Añadido get_object_or_404 (aunque no lo usaremos directamente aquí con la API)
 from django.contrib import messages
-from .forms import LoginForm, ProductForm
+from .forms import LoginForm, ProductForm, CategoryForm
 
 def login_view(request):
     if request.method == 'POST':
@@ -464,3 +464,71 @@ def product_delete_view(request, product_id):
         'current_username': current_username
     }
     return render(request, 'portal/product_confirm_delete.html', context)
+
+def category_create_view(request):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username')
+
+    if not auth_token:
+        messages.error(request, 'Debes iniciar sesión para añadir una categoría.')
+        return redirect('portal:login')
+
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    if not fastapi_base_url:
+        messages.error(request, "Error de configuración: URL de la API no definida.")
+        return redirect('portal:dashboard') # O a una página de error de configuración
+
+    api_categories_url = f"{fastapi_base_url}/categories/"
+    headers = {'Authorization': f'Bearer {auth_token}'}
+
+    if request.method == 'POST':
+        form = CategoryForm(request.POST)
+        if form.is_valid():
+            category_data_to_send = form.cleaned_data.copy()
+            try:
+                response = requests.post(api_categories_url, json=category_data_to_send, headers=headers)
+                response.raise_for_status()
+                
+                new_category_api_response = response.json()
+                messages.success(request, f"Categoría '{new_category_api_response.get('name')}' creada exitosamente.")
+                # Podríamos redirigir a una lista de categorías o al dashboard
+                return redirect('portal:dashboard') 
+
+            except requests.exceptions.HTTPError as e_http:
+                error_message = "Error al crear la categoría en la API."
+                if e_http.response is not None:
+                    try:
+                        api_error_details = e_http.response.json().get('detail')
+                        if isinstance(api_error_details, list): # Errores de validación Pydantic
+                            readable_errors = []
+                            for error_item in api_error_details:
+                                loc = " -> ".join(map(str, error_item.get('loc', ['body'])))
+                                msg = error_item.get('msg', 'Error desconocido')
+                                readable_errors.append(f"Campo '{loc}': {msg}")
+                            error_message = "Error de validación de la API: " + "; ".join(readable_errors)
+                        elif isinstance(api_error_details, str): # Otros errores de la API (ej: nombre duplicado)
+                             error_message = f"Error de API: {api_error_details}"
+                        else:
+                            error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
+                    except requests.exceptions.JSONDecodeError:
+                        error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
+                messages.error(request, error_message)
+            except requests.exceptions.RequestException as e_req:
+                messages.error(request, f"Error de red al crear la categoría: {e_req}")
+            except Exception as e_gen:
+                messages.error(request, f"Un error inesperado ocurrió creando la categoría: {e_gen}")
+            # Si hay error, el 'form' ya está poblado con request.POST, se volverá a renderizar
+    else: # Petición GET
+        form = CategoryForm()
+
+    context = {
+        'form': form,
+        'form_title': 'Añadir Nueva Categoría', # Para la plantilla
+        'current_username': current_username
+    }
+    # Reutilizaremos la plantilla product_form.html para categorías por simplicidad,
+    # o podrías crear una category_form.html muy similar.
+    return render(request, 'portal/category_form.html', context) # Usaremos una nueva plantilla
+
+
+
