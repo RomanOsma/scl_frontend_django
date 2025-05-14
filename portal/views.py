@@ -1,12 +1,10 @@
 # scl_frontend_django/portal/views.py
-
 import requests
 import os
 from django.shortcuts import render, redirect, get_object_or_404 # Añadido get_object_or_404 (aunque no lo usaremos directamente aquí con la API)
 from django.contrib import messages
 from .forms import LoginForm, ProductForm
 
-# --- Vista de Login ---
 def login_view(request):
     if request.method == 'POST':
         form = LoginForm(request.POST)
@@ -64,8 +62,6 @@ def login_view(request):
 
     return render(request, 'portal/login.html', {'form': form})
 
-
-# --- Vista de Logout ---
 def logout_view(request):
     if 'auth_token' in request.session:
         del request.session['auth_token']
@@ -75,8 +71,6 @@ def logout_view(request):
     messages.info(request, 'Has cerrado sesión exitosamente.')
     return redirect('portal:login')
 
-
-# --- Vista de Dashboard (Muestra productos) ---
 def dashboard_view(request):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
@@ -136,8 +130,6 @@ def dashboard_view(request):
     }
     return render(request, 'portal/dashboard.html', context)
 
-
-# --- Vista de Detalle del Producto ---
 def product_detail_view(request, product_id):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
@@ -194,8 +186,6 @@ def product_detail_view(request, product_id):
     }
     return render(request, 'portal/product_detail.html', context)
 
-
-# --- Vista para Crear un Nuevo Producto ---
 def product_create_view(request):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
@@ -270,8 +260,6 @@ def product_create_view(request):
     }
     return render(request, 'portal/product_form.html', context)
 
-
-# --- Vista para Actualizar un Producto Existente ---
 def product_update_view(request, product_id):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
@@ -388,3 +376,91 @@ def product_update_view(request, product_id):
         'current_username': current_username
     }
     return render(request, 'portal/product_form.html', context)
+
+def product_delete_view(request, product_id):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username') # Para pasarlo a la plantilla si es necesario
+
+    if not auth_token:
+        messages.error(request, 'Debes iniciar sesión para eliminar un producto.')
+        return redirect('portal:login')
+
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    if not fastapi_base_url:
+        messages.error(request, "Error de configuración: URL de la API no definida.")
+        return redirect('portal:dashboard')
+
+    api_product_url = f"{fastapi_base_url}/products/{product_id}/"
+    headers = {'Authorization': f'Bearer {auth_token}'}
+    
+    product_to_delete = None
+    api_error_message = None
+
+    # Primero, obtener el producto para mostrar su nombre en la confirmación
+    try:
+        response_get = requests.get(api_product_url, headers=headers)
+        response_get.raise_for_status()
+        product_to_delete = response_get.json()
+    except requests.exceptions.HTTPError as e_http:
+        # ... (Manejo de errores similar a product_detail_view para GET) ...
+        if e_http.response is not None:
+            if e_http.response.status_code == 401: # Sesión expirada o inválida
+                messages.error(request, "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
+                if 'auth_token' in request.session: del request.session['auth_token']
+                if 'username' in request.session: del request.session['username']
+                return redirect('portal:login')
+            elif e_http.response.status_code == 404:
+                messages.error(request, f"Producto con ID {product_id} no encontrado para eliminar.")
+            else:
+                messages.error(request, f"Error ({e_http.response.status_code}) al obtener el producto para eliminar.")
+        else:
+            messages.error(request, "Error de HTTP sin respuesta al obtener producto.")
+        return redirect('portal:dashboard') # Redirigir si no se puede obtener el producto
+    except requests.exceptions.RequestException:
+        messages.error(request, "Error de red al intentar obtener el producto para eliminar.")
+        return redirect('portal:dashboard')
+
+    if not product_to_delete: # Doble chequeo por si acaso
+         messages.error(request, f"No se pudo encontrar el producto con ID {product_id}.")
+         return redirect('portal:dashboard')
+
+    if request.method == 'POST':
+        # El usuario ha confirmado la eliminación
+        try:
+            response_delete = requests.delete(api_product_url, headers=headers)
+            response_delete.raise_for_status() # Lanza error para 4xx/5xx
+
+            # Si la API devuelve el objeto eliminado (como lo configuramos):
+            # deleted_product_name = response_delete.json().get('name', 'el producto')
+            # messages.success(request, f"Producto '{deleted_product_name}' eliminado exitosamente.")
+            # O si es 204 No Content:
+            messages.success(request, f"Producto '{product_to_delete.get('name', 'ID '+str(product_id))}' eliminado exitosamente.")
+            return redirect('portal:dashboard')
+
+        except requests.exceptions.HTTPError as e_http:
+            error_message = "Error al eliminar el producto en la API."
+            if e_http.response is not None:
+                try:
+                    api_error_details = e_http.response.json().get('detail')
+                    if isinstance(api_error_details, str):
+                        error_message = f"Error de API: {api_error_details}"
+                    else: # Error 500 o no JSON
+                        error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
+                except requests.exceptions.JSONDecodeError:
+                    error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
+            messages.error(request, error_message)
+            # Volver a la página de confirmación o al dashboard
+            return redirect('portal:product_detail', product_id=product_id) 
+        except requests.exceptions.RequestException as e_req:
+            messages.error(request, f"Error de red al eliminar el producto: {e_req}")
+            return redirect('portal:product_detail', product_id=product_id)
+        except Exception as e_gen:
+            messages.error(request, f"Un error inesperado ocurrió al eliminar el producto: {e_gen}")
+            return redirect('portal:product_detail', product_id=product_id)
+    
+    # Si es una petición GET, mostrar la página de confirmación
+    context = {
+        'product': product_to_delete,
+        'current_username': current_username
+    }
+    return render(request, 'portal/product_confirm_delete.html', context)

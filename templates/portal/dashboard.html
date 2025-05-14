@@ -49,8 +49,8 @@
                         <td>{{ product.codigo_sku|default:"N/A" }}</td>
                         <td>
                             <a href="{% url 'portal:product_detail' product_id=product.id %}" class="btn btn-sm btn-info me-1">Ver</a>
-                            <a href="{% url 'portal:product_edit' product_id=product.id %}" class="btn btn-sm btn-warning me-1">Editar</a> {# ¡MODIFICADO! #}
-                            <!-- Botón de eliminar (más adelante) -->
+                            <a href="{% url 'portal:product_edit' product_id=product.id %}" class="btn btn-sm btn-warning me-1">Editar</a>
+                            <a href="{% url 'portal:product_delete' product_id=product.id %}" class="btn btn-sm btn-danger">Eliminar</a> 
                         </td>
                     </tr>
                     {% endfor %}
