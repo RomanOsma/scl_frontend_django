@@ -42,7 +42,7 @@
         <a href="#" class="btn btn-warning">Editar Producto (Próximamente)</a>
     {% else %}
         <div class="alert alert-warning" role="alert">
-            No se pudo cargar la información del producto.
+            No se pudo cargar la información del producto o el producto no existe.
         </div>
         <a href="{% url 'portal:dashboard' %}" class="btn btn-primary">Volver al Dashboard</a>
     {% endif %}
