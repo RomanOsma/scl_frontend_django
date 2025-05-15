@@ -1,0 +1,29 @@
+{% extends "portal/base.html" %}
+
+{% block title %}Confirmar Eliminación - Inventario SCL{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="card">
+        <div class="card-header bg-danger text-white">
+            <h2 class="h5 mb-0">Confirmar Eliminación</h2>
+        </div>
+        <div class="card-body">
+            <p class="card-text">¿Estás seguro de que deseas eliminar {{ item_type|lower }} <strong>"{{ item.name|default:"este ítem" }}"</strong> (ID: {{ item.id }})?</p>
+            
+            {% if item_type == 'Categoría' and item.products_count and item.products_count > 0 %}
+            <div class="alert alert-warning">
+                <strong>Advertencia:</strong> Esta categoría tiene {{ item.products_count }} producto(s) asociado(s).
+                Eliminar la categoría podría afectar a estos productos (dependiendo de la lógica de tu API, podrían quedar sin categoría o la eliminación podría ser prevenida si tiene productos asociados).
+            </div>
+            {% endif %}
+
+            <form method="post" action=""> {# La action vacía "" significa que el POST se enviará a la URL actual #}
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger"><i class="fas fa-trash-alt"></i> Sí, eliminar</button>
+                <a href="{% if cancel_url_name %}{% url cancel_url_name %}{% else %}{% url 'portal:dashboard' %}{% endif %}" class="btn btn-secondary"><i class="fas fa-times"></i> Cancelar</a>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

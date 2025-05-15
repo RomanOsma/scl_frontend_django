@@ -1,39 +1,40 @@
-<!-- scl_frontend_django/templates/portal/category_list.html -->
-{% extends "base.html" %}
+{% extends "portal/base.html" %}
 
-{% block title %}Lista de Categorías - SCL Inventory{% endblock title %}
+{% block title %}Lista de Categorías - Inventario SCL{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
-        <h1>Lista de Categorías</h1>
-        <a href="{% url 'portal:category_add' %}" class="btn btn-primary">Añadir Nueva Categoría</a>
+        <h2>Lista de Categorías</h2>
+        <a href="{% url 'portal:category_add' %}" class="btn btn-success">
+            <i class="fas fa-plus"></i> Añadir Nueva Categoría
+        </a>
     </div>
 
+    {% include 'portal/partials/messages.html' %}
+
     {% if api_error %}
-        <div class="alert alert-danger" role="alert">
-            <strong>Error de API:</strong> {{ api_error }}
-        </div>
+        <div class="alert alert-danger">{{ api_error }}</div>
     {% endif %}
 
     {% if categories %}
         <div class="table-responsive">
             <table class="table table-striped table-hover">
-                <thead>
+                <thead class="thead-dark">
                     <tr>
-                        <th scope="col">ID</th>
-                        <th scope="col">Nombre</th>
-                        <th scope="col">Descripción</th>
-                        <th scope="col">Acciones</th>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                        <th class="text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for category in categories %}
                     <tr>
-                        <th scope="row">{{ category.id }}</th>
+                        <td>{{ category.id }}</td>
                         <td>{{ category.name }}</td>
                         <td>{{ category.description|default:"N/A" }}</td>
-                        <td>
+                        <td class="text-center">
                             <a href="{% url 'portal:category_edit' category.id %}" class="btn btn-sm btn-warning me-1" title="Editar"><i class="fas fa-edit"></i> Editar</a>
                             <a href="{% url 'portal:category_delete' category.id %}" class="btn btn-sm btn-danger" title="Eliminar"><i class="fas fa-trash-alt"></i> Eliminar</a>
                         </td>
@@ -42,10 +43,10 @@
                 </tbody>
             </table>
         </div>
-    {% elif not api_error %}
+    {% else %}
         <div class="alert alert-info" role="alert">
-            No hay categorías para mostrar. Puedes <a href="{% url 'portal:category_add' %}" class="alert-link">añadir una nueva</a>.
+            No hay categorías para mostrar. Puedes <a href="{% url 'portal:category_add' %}" class="alert-link">añadir una nueva categoría</a>.
         </div>
     {% endif %}
 </div>
-{% endblock content %}
+{% endblock %}

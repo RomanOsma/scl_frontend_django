@@ -588,4 +588,184 @@ def category_list_view(request):
     }
     return render(request, 'portal/category_list.html', context)
 
+def category_update_view(request, category_id):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username')
 
+    if not auth_token:
+        messages.error(request, 'Debes iniciar sesión para editar una categoría.')
+        return redirect('portal:login')
+
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    if not fastapi_base_url:
+        messages.error(request, "Error de configuración: URL de la API no definida.")
+        return redirect('portal:category_list')
+
+    api_category_url = f"{fastapi_base_url}/categories/{category_id}/"
+    headers = {'Authorization': f'Bearer {auth_token}'}
+    
+    category_instance_data = None
+    try:
+        response_get = requests.get(api_category_url, headers=headers)
+        response_get.raise_for_status()
+        category_instance_data = response_get.json()
+    except requests.exceptions.HTTPError as e_http:
+        if e_http.response.status_code == 401:
+            messages.error(request, "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
+            if 'auth_token' in request.session: del request.session['auth_token']
+            if 'username' in request.session: del request.session['username']
+            return redirect('portal:login')
+        elif e_http.response.status_code == 404:
+            messages.error(request, f"Categoría con ID {category_id} no encontrada para editar.")
+        else:
+            messages.error(request, f"Error ({e_http.response.status_code}) al obtener la categoría para editar.")
+        return redirect('portal:category_list')
+    except requests.exceptions.RequestException as e:
+        messages.error(request, f"No se pudo obtener la categoría a editar: {e}")
+        return redirect('portal:category_list')
+    except Exception as e: 
+        messages.error(request, f"Error inesperado al obtener categoría para editar: {e}")
+        return redirect('portal:category_list')
+
+    if not category_instance_data:
+        messages.error(request, f"Categoría con ID {category_id} no encontrada para editar (después de la petición).")
+        return redirect('portal:category_list')
+
+    if request.method == 'POST':
+        form = CategoryForm(request.POST) # Validar los datos enviados
+        if form.is_valid():
+            category_data_to_send = form.cleaned_data.copy()
+            try:
+                response_put = requests.put(api_category_url, json=category_data_to_send, headers=headers)
+                response_put.raise_for_status()
+                
+                updated_category_api_response = response_put.json()
+                messages.success(request, f"Categoría '{updated_category_api_response.get('name')}' actualizada exitosamente.")
+                return redirect('portal:category_list')
+
+            except requests.exceptions.HTTPError as e_http:
+                error_message = "Error al actualizar la categoría en la API."
+                # (Mismo manejo de errores de API que en category_create_view)
+                if e_http.response is not None:
+                    try:
+                        api_error_details = e_http.response.json().get('detail')
+                        if isinstance(api_error_details, list):
+                            readable_errors = []
+                            for error_item in api_error_details:
+                                loc = " -> ".join(map(str, error_item.get('loc', ['body'])))
+                                msg = error_item.get('msg', 'Error desconocido')
+                                readable_errors.append(f"Campo '{loc}': {msg}")
+                            error_message = "Error de validación de la API: " + "; ".join(readable_errors)
+                        elif isinstance(api_error_details, str):
+                             error_message = f"Error de API: {api_error_details}"
+                        else:
+                            error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
+                    except requests.exceptions.JSONDecodeError:
+                        error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
+                messages.error(request, error_message)
+            except requests.exceptions.RequestException as e_req:
+                messages.error(request, f"Error de red al actualizar la categoría: {e_req}")
+            except Exception as e_gen:
+                messages.error(request, f"Un error inesperado ocurrió actualizando la categoría: {e_gen}")
+    else: # Petición GET
+        initial_data = {
+            'name': category_instance_data.get('name'),
+            'description': category_instance_data.get('description'),
+        }
+        form = CategoryForm(initial=initial_data)
+
+    context = {
+        'form': form,
+        'form_title': f"Editar Categoría: {category_instance_data.get('name', '')}",
+        'is_editing': True, 
+        'category_id': category_id, 
+        'current_username': current_username
+    }
+    return render(request, 'portal/category_form.html', context)
+
+def category_delete_view(request, category_id):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username')
+
+    if not auth_token:
+        messages.error(request, 'Debes iniciar sesión para eliminar una categoría.')
+        return redirect('portal:login')
+
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    if not fastapi_base_url:
+        messages.error(request, "Error de configuración: URL de la API no definida.")
+        return redirect('portal:category_list')
+
+    api_category_url = f"{fastapi_base_url}/categories/{category_id}/"
+    headers = {'Authorization': f'Bearer {auth_token}'}
+    
+    category_to_delete = None
+    # Fetch category details first, for both GET (confirmation page) and POST (success message name)
+    try:
+        response_get = requests.get(api_category_url, headers=headers)
+        response_get.raise_for_status()
+        category_to_delete = response_get.json()
+    except requests.exceptions.HTTPError as e_http:
+            if e_http.response.status_code == 401:
+                messages.error(request, "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
+                if 'auth_token' in request.session: del request.session['auth_token']
+                if 'username' in request.session: del request.session['username']
+                return redirect('portal:login')
+            elif e_http.response.status_code == 404:
+                messages.error(request, f"Categoría con ID {category_id} no encontrada para eliminar.")
+            else: # Otros errores HTTP al obtener la categoría
+                messages.error(request, f"Error ({e_http.response.status_code}) al obtener la categoría.")
+            return redirect('portal:category_list')
+    except requests.exceptions.RequestException:
+        messages.error(request, "Error de red al intentar obtener la categoría.")
+        return redirect('portal:category_list')
+    except Exception as e: # Captura otros errores como JSONDecodeError
+        messages.error(request, f"Error inesperado al obtener la categoría: {e}")
+        return redirect('portal:category_list')
+
+    if not category_to_delete: # Debería ser capturado por las excepciones, pero como salvaguarda
+         messages.error(request, f"No se pudo encontrar la categoría con ID {category_id} para procesar la eliminación.")
+         return redirect('portal:category_list')
+
+    if request.method == 'POST': # Confirmación de eliminación
+        try:
+            response_delete = requests.delete(api_category_url, headers=headers)
+            response_delete.raise_for_status() 
+            
+            # Usar el nombre de category_to_delete (obtenido antes) para el mensaje.
+            # Esto funciona incluso si la API devuelve 204 No Content en DELETE.
+            category_name_display = category_to_delete.get('name', f"ID {category_id}")
+            
+            messages.success(request, f"Categoría '{category_name_display}' eliminada exitosamente.")
+            return redirect('portal:category_list')
+
+        except requests.exceptions.HTTPError as e_http:
+            error_message = "Error al eliminar la categoría en la API."
+            # (Manejo similar a product_delete_view)
+            if e_http.response is not None:
+                try:
+                    api_error_details = e_http.response.json().get('detail')
+                    if isinstance(api_error_details, str):
+                        error_message = f"Error de API: {api_error_details}"
+                    else: 
+                        error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
+                except requests.exceptions.JSONDecodeError:
+                    error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
+            messages.error(request, error_message)
+            return redirect('portal:category_list') 
+        except requests.exceptions.RequestException as e_req:
+            messages.error(request, f"Error de red al eliminar la categoría: {e_req}")
+            return redirect('portal:category_list')
+        except Exception as e_gen:
+            messages.error(request, f"Un error inesperado ocurrió al eliminar la categoría: {e_gen}")
+            return redirect('portal:category_list')
+    
+    # Si es una petición GET, mostrar la página de confirmación
+    context = {
+        'item': category_to_delete, # Nombre genérico 'item' para reutilizar plantilla
+        'item_type': 'Categoría',   # Para el mensaje de confirmación
+        'current_username': current_username,
+        'cancel_url_name': 'portal:category_list' # Para el botón "Cancelar"
+    }
+    # Usaremos una plantilla de confirmación genérica 'confirm_delete.html'
+    return render(request, 'portal/confirm_delete.html', context)
