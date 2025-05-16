@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="d78780af-29ec-4012-8a33-b841fb934c00" name="Changes" comment="Versión local estable: CRUD Productos y Categorías funcional" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="railway_deployment" />
+      </map>
+    </option>
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;RomanOsma&quot;
+  }
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/RomanOsma/scl_frontend_django.git&quot;,
+    &quot;accountId&quot;: &quot;6b812e4f-22a6-4861-8552-ff61daec3832&quot;
+  }
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7
+}</component>
+  <component name="ProjectId" id="2xGKiYH1c72JGTp8A0BH20Oq9N4" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/roman/Cursos/scl_inventory_proyecto2025/scl_inventory_final/scl_frontend_django"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-2ee2454479a3-9cdd278e9d02-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-251.25410.122" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="d78780af-29ec-4012-8a33-b841fb934c00" name="Changes" comment="" />
+      <created>1747559097373</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1747559097373</updated>
+    </task>
+    <task id="LOCAL-00001" summary="Versión local estable: CRUD Productos y Categorías funcional">
+      <option name="closed" value="true" />
+      <created>1747719643939</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1747719643939</updated>
+    </task>
+    <task id="LOCAL-00002" summary="Versión local estable: CRUD Productos y Categorías funcional">
+      <option name="closed" value="true" />
+      <created>1747720052845</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1747720052845</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Versión local estable: CRUD Productos y Categorías funcional">
+      <option name="closed" value="true" />
+      <created>1747720086759</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1747720086759</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Versión local estable: CRUD Productos y Categorías funcional">
+      <option name="closed" value="true" />
+      <created>1747720103298</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1747720103298</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Versión local estable: CRUD Productos y Categorías funcional">
+      <option name="closed" value="true" />
+      <created>1747720207571</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1747720207571</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
+    <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Versión local estable: CRUD Productos y Categorías funcional" />
+    <option name="LAST_COMMIT_MESSAGE" value="Versión local estable: CRUD Productos y Categorías funcional" />
+  </component>
+</project>
