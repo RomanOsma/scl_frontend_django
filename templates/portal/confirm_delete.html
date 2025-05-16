@@ -1,8 +1,7 @@
-<!-- scl_frontend_django/templates/portal/confirm_delete.html -->
 {% extends "base.html" %}
 {% load static %}
 
-{% block title %}Confirmar Eliminación{% endblock %}
+{% block title %}Confirmar Eliminación - SCL Inventory{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
@@ -23,13 +22,14 @@
                     {% endif %}
 
                     {% if item %}
-                        <p class="fs-5">¿Estás seguro de que quieres eliminar {{ item_type|lower }}: <strong>"{{ item.name }}"</strong> (ID: {{ item.id }})?</p>
+                        <p class="fs-5">¿Estás seguro de que quieres eliminar {{ item_type|lower }}: <strong>"{{ item.name|default:'este elemento' }}"</strong> (ID: {{ item.id }})?</p>
                         <p class="text-danger"><strong>¡Esta acción no se puede deshacer!</strong></p>
                         
                         <form method="post">
                             {% csrf_token %}
                             <div class="d-flex justify-content-end mt-4">
-                                <a href="{% url cancel_url_name %}" class="btn btn-secondary me-2"> <!-- Simplificado para category_list -->
+                                <!-- Enlace Cancelar actualizado para usar cancel_url_info -->
+                                <a href="{% if cancel_url_info.pk %}{% url cancel_url_info.name cancel_url_info.pk %}{% else %}{% url cancel_url_info.name %}{% endif %}" class="btn btn-secondary me-2">
                                     <i class="fas fa-times"></i> Cancelar
                                 </a>
                                 <button type="submit" class="btn btn-danger">
@@ -39,7 +39,8 @@
                         </form>
                     {% else %}
                         <div class="alert alert-warning" role="alert">
-                            No se encontró el elemento a eliminar. Por favor, <a href="{% if cancel_url_name %}{% url cancel_url_name %}{% else %}{% url 'portal:dashboard' %}{% endif %}" class="alert-link">vuelve a la lista</a>.
+                            No se encontró el elemento a eliminar. Por favor,
+                            <a href="{% if cancel_url_info %}{% if cancel_url_info.pk %}{% url cancel_url_info.name cancel_url_info.pk %}{% else %}{% url cancel_url_info.name %}{% endif %}{% else %}{% url 'portal:dashboard' %}{% endif %}" class="alert-link">vuelve a la lista o al dashboard</a>.
                         </div>
                     {% endif %}
                 </div>

@@ -1,684 +1,378 @@
 # scl_frontend_django/portal/views.py
 import requests
 import os
-from django.shortcuts import render, redirect, get_object_or_404 # Añadido get_object_or_404 (aunque no lo usaremos directamente aquí con la API)
+from django.shortcuts import render, redirect
 from django.contrib import messages
 from .forms import LoginForm, ProductForm, CategoryForm
 
+# --- login_view, logout_view, dashboard_view ---
 def login_view(request):
     if request.method == 'POST':
         form = LoginForm(request.POST)
         if form.is_valid():
             username = form.cleaned_data.get('username')
             password = form.cleaned_data.get('password')
-            
             fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
             if not fastapi_base_url:
                 messages.error(request, "Error de configuración: URL de la API no definida.")
                 return render(request, 'portal/login.html', {'form': form})
-
             api_token_url = f"{fastapi_base_url}/auth/token"
             auth_data = {'username': username, 'password': password}
-            
             try:
                 response = requests.post(api_token_url, data=auth_data)
                 response.raise_for_status() 
                 token_data = response.json()
-                
                 request.session['auth_token'] = token_data.get('access_token')
                 request.session['username'] = username 
-                
                 messages.success(request, f'¡Bienvenido de nuevo, {username}!')
                 return redirect('portal:dashboard')
-
             except requests.exceptions.HTTPError as e_http:
+                error_detail = "Error de autenticación."
                 if e_http.response is not None:
-                    if e_http.response.status_code == 401:
-                        error_detail = "Nombre de usuario o contraseña incorrectos."
-                        try:
-                            error_detail = e_http.response.json().get('detail', error_detail)
-                        except requests.exceptions.JSONDecodeError:
-                            pass
-                        messages.error(request, error_detail)
-                    elif e_http.response.status_code == 400:
-                        error_detail = "Error en la solicitud (ej: usuario inactivo)."
-                        try:
-                            error_detail = e_http.response.json().get('detail', error_detail)
-                        except requests.exceptions.JSONDecodeError:
-                            pass
-                        messages.error(request, error_detail)
-                    else:
-                        messages.error(request, f'Error del servicio de autenticación: {e_http.response.status_code}')
-                else:
-                    messages.error(request, 'Error de HTTP sin respuesta del servidor.')
-            except requests.exceptions.RequestException as e_req:
-                messages.error(request, f'Error de red al intentar autenticar: {e_req}')
-            except Exception as e_gen:
-                messages.error(request, f'Ha ocurrido un error inesperado durante el login: {e_gen}')
-        else:
-            messages.error(request, 'Por favor, corrige los errores en el formulario.')
-    else: 
-        form = LoginForm()
-
+                    if e_http.response.status_code == 401: error_detail = "Nombre de usuario o contraseña incorrectos."
+                    try: error_detail = e_http.response.json().get('detail', error_detail)
+                    except: pass
+                messages.error(request, error_detail)
+            except Exception as e: messages.error(request, f'Error: {e}')
+        else: messages.error(request, 'Formulario inválido.')
+    else: form = LoginForm()
     return render(request, 'portal/login.html', {'form': form})
 
 def logout_view(request):
-    if 'auth_token' in request.session:
-        del request.session['auth_token']
-    if 'username' in request.session:
-        del request.session['username']
-    
+    if 'auth_token' in request.session: del request.session['auth_token']
+    if 'username' in request.session: del request.session['username']
     messages.info(request, 'Has cerrado sesión exitosamente.')
     return redirect('portal:login')
 
 def dashboard_view(request):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
-
     if not auth_token:
-        messages.warning(request, 'Por favor, inicia sesión para acceder a esta página.')
+        messages.warning(request, 'Por favor, inicia sesión.')
         return redirect('portal:login')
-
     fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida para el dashboard.")
-        return render(request, 'portal/dashboard.html', {
-            'current_username': current_username,
-            'products': [],
-            'api_error': "Error de configuración interna (URL de API no encontrada)."
-        })
-
-    api_products_url = f"{fastapi_base_url}/products/"
-    headers = {'Authorization': f'Bearer {auth_token}'}
     products_list = []
     api_error_message = None
-
-    try:
-        params = {'skip': 0, 'limit': 100}
-        response = requests.get(api_products_url, headers=headers, params=params)
-        response.raise_for_status()
-        products_list = response.json()
-    except requests.exceptions.HTTPError as e_http:
-        if e_http.response is not None:
-            if e_http.response.status_code == 401:
-                api_error_message = "Tu sesión ha expirado o es inválida. Por favor, inicia sesión de nuevo."
-                if 'auth_token' in request.session: del request.session['auth_token']
-                if 'username' in request.session: del request.session['username']
-                messages.error(request, api_error_message)
-                return redirect('portal:login')
-            else:
-                detail_error = ""
+    if fastapi_base_url:
+        api_products_url = f"{fastapi_base_url}/products/"
+        headers = {'Authorization': f'Bearer {auth_token}'}
+        try:
+            response = requests.get(api_products_url, headers=headers, params={'limit': 100})
+            response.raise_for_status()
+            products_list = response.json()
+        except Exception as e:
+            api_error_message = f"Error obteniendo productos: {e}"
+            # Intentar obtener un mensaje más específico de la API si es un HTTPError
+            if hasattr(e, 'response') and e.response is not None:
                 try:
-                    detail_error = e_http.response.json().get('detail', e_http.response.text)
-                except requests.exceptions.JSONDecodeError:
-                    detail_error = e_http.response.text
-                api_error_message = f"Error al obtener productos de la API: {e_http.response.status_code} - {detail_error}"
-        else:
-            api_error_message = "Error de HTTP sin respuesta del servidor al obtener productos."
+                    detail = e.response.json().get('detail', str(e))
+                    api_error_message = f"Error API ({e.response.status_code}): {detail}"
+                except: # Si no se puede parsear JSON
+                    api_error_message = f"Error API ({e.response.status_code}): {e.response.text}"
+            messages.error(request, api_error_message)
+    else:
+        api_error_message = "URL de API no configurada."
         messages.error(request, api_error_message)
-    except requests.exceptions.RequestException as e_req:
-        api_error_message = f"Error de red al conectar con la API de productos: {e_req}"
-        messages.error(request, api_error_message)
-    except Exception as e_gen:
-        api_error_message = f"Un error inesperado ocurrió al obtener productos: {e_gen}"
-        messages.error(request, api_error_message)
-
-    context = {
-        'current_username': current_username,
-        'products': products_list,
-        'api_error': api_error_message
-    }
+    context = {'current_username': current_username, 'products': products_list, 'api_error': api_error_message}
     return render(request, 'portal/dashboard.html', context)
+
+# --- CRUD PRODUCTOS ---
+def product_create_view(request):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username')
+    if not auth_token: return redirect('portal:login')
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    api_products_url = f"{fastapi_base_url}/products/"
+    headers = {'Authorization': f'Bearer {auth_token}'}
+
+    if request.method == 'POST':
+        form = ProductForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data.copy()
+            if not data.get('category_id'): 
+                data['category_id'] = None
+            
+            # Convertir Decimal a float para JSON serializable
+            if data.get('price') is not None:
+                data['price'] = float(data['price']) # <--- CORRECCIÓN
+            else:
+                 data.pop('price', None) # Si es None y la API no lo quiere, se elimina
+
+            try:
+                response = requests.post(api_products_url, json=data, headers=headers)
+                response.raise_for_status()
+                messages.success(request, f"Producto '{response.json().get('name')}' creado.")
+                return redirect('portal:dashboard')
+            except requests.exceptions.HTTPError as e:
+                error_detail = "Error API creando producto."
+                if e.response is not None:
+                    try: 
+                        detail = e.response.json().get('detail')
+                        if isinstance(detail, list):
+                            readable_errors = [f"Campo {' -> '.join(map(str, err.get('loc',[])))}: {err.get('msg','')}" for err in detail]
+                            error_detail = "Errores de validación: " + "; ".join(readable_errors)
+                        elif isinstance(detail, str):
+                            error_detail = detail
+                        else:
+                             error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                    except:  error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                messages.error(request, error_detail)
+            except Exception as e: messages.error(request, f"Error inesperado: {e}")
+        else:
+            messages.error(request, "Formulario inválido. Por favor, revisa los campos.")
+    else:
+        form = ProductForm()
+    
+    context = {'form': form, 'is_editing': False, 'current_username': current_username, 'form_title': "Crear Producto"}
+    return render(request, 'portal/product_form.html', context)
 
 def product_detail_view(request, product_id):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
-
-    if not auth_token:
-        messages.warning(request, 'Por favor, inicia sesión para ver detalles del producto.')
-        return redirect('portal:login')
-
+    if not auth_token: return redirect('portal:login')
     fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return redirect('portal:dashboard') 
-
-    api_product_url = f"{fastapi_base_url}/products/{product_id}/"
+    api_url = f"{fastapi_base_url}/products/{product_id}/"
     headers = {'Authorization': f'Bearer {auth_token}'}
-    product_data = None
-    api_error_message = None
-
+    product = None
+    api_error_message = None # Renombrado para evitar confusión con la variable 'error'
     try:
-        response = requests.get(api_product_url, headers=headers)
+        response = requests.get(api_url, headers=headers)
         response.raise_for_status()
-        product_data = response.json()
-    except requests.exceptions.HTTPError as e_http:
-        if e_http.response is not None:
-            if e_http.response.status_code == 401:
-                api_error_message = "Tu sesión ha expirado o es inválida. Por favor, inicia sesión de nuevo."
-                if 'auth_token' in request.session: del request.session['auth_token']
-                if 'username' in request.session: del request.session['username']
-                messages.error(request, api_error_message)
-                return redirect('portal:login')
-            elif e_http.response.status_code == 404:
-                api_error_message = f"Producto con ID {product_id} no encontrado en la API."
-            else:
-                detail_error = ""
-                try:
-                    detail_error = e_http.response.json().get('detail', e_http.response.text)
-                except requests.exceptions.JSONDecodeError:
-                     detail_error = e_http.response.text
-                api_error_message = f"Error al obtener el producto de la API: {e_http.response.status_code} - {detail_error}"
-        else:
-            api_error_message = "Error de HTTP sin respuesta del servidor al obtener el producto."
+        product = response.json()
+    except Exception as e:
+        api_error_message = f"Error obteniendo producto ({product_id})."
+        if hasattr(e, 'response') and e.response is not None:
+            if e.response.status_code == 404: api_error_message = f"Producto con ID {product_id} no encontrado."
+            try: api_error_message = e.response.json().get('detail', api_error_message)
+            except: pass
+        else: api_error_message = str(e)
         messages.error(request, api_error_message)
-    except requests.exceptions.RequestException as e_req:
-        api_error_message = f"Error de red al conectar con la API: {e_req}"
-        messages.error(request, api_error_message)
-    except Exception as e_gen:
-        api_error_message = f"Un error inesperado ocurrió: {e_gen}"
-        messages.error(request, api_error_message)
-            
-    context = {
-        'product': product_data,
-        'api_error': api_error_message,
-        'current_username': current_username
-    }
+    context = {'product': product, 'api_error': api_error_message, 'current_username': current_username}
     return render(request, 'portal/product_detail.html', context)
-
-def product_create_view(request):
-    auth_token = request.session.get('auth_token')
-    current_username = request.session.get('username')
-
-    if not auth_token:
-        messages.error(request, 'Debes iniciar sesión para añadir un producto.')
-        return redirect('portal:login')
-
-    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return redirect('portal:dashboard')
-
-    api_products_url = f"{fastapi_base_url}/products/"
-    headers = {'Authorization': f'Bearer {auth_token}'}
-    form_kwargs = {'api_auth_token': auth_token}
-
-    if request.method == 'POST':
-        form = ProductForm(request.POST, **form_kwargs)
-        if form.is_valid():
-            product_data_to_send = form.cleaned_data.copy()
-            
-            if not product_data_to_send.get('category_id'):
-                product_data_to_send['category_id'] = None
-            else:
-                try:
-                    product_data_to_send['category_id'] = int(product_data_to_send['category_id'])
-                except (ValueError, TypeError):
-                    product_data_to_send['category_id'] = None
-
-            if 'price' in product_data_to_send and product_data_to_send['price'] is not None:
-                 product_data_to_send['price'] = float(product_data_to_send['price'])
-            else:
-                product_data_to_send.pop('price', None)
-
-            try:
-                response = requests.post(api_products_url, json=product_data_to_send, headers=headers)
-                response.raise_for_status()
-                new_product_api_response = response.json()
-                messages.success(request, f"Producto '{new_product_api_response.get('name')}' creado exitosamente.")
-                return redirect('portal:dashboard')
-            except requests.exceptions.HTTPError as e_http:
-                error_message = "Error al crear el producto en la API."
-                if e_http.response is not None:
-                    try:
-                        api_error_details = e_http.response.json().get('detail')
-                        if isinstance(api_error_details, list):
-                            readable_errors = []
-                            for error_item in api_error_details:
-                                loc = " -> ".join(map(str, error_item.get('loc', ['body'])))
-                                msg = error_item.get('msg', 'Error desconocido')
-                                readable_errors.append(f"Campo '{loc}': {msg}")
-                            error_message = "Error de validación de la API: " + "; ".join(readable_errors)
-                        elif isinstance(api_error_details, str):
-                             error_message = f"Error de API: {api_error_details}"
-                        else:
-                            error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
-                    except requests.exceptions.JSONDecodeError:
-                        error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
-                messages.error(request, error_message)
-            except requests.exceptions.RequestException as e_req:
-                messages.error(request, f"Error de red al crear el producto: {e_req}")
-            except Exception as e_gen:
-                messages.error(request, f"Un error inesperado ocurrió creando producto: {e_gen}")
-    else: 
-        form = ProductForm(**form_kwargs)
-
-    context = {
-        'form': form,
-        'is_editing': False, # Para la plantilla, indicar que es creación
-        'current_username': current_username
-    }
-    return render(request, 'portal/product_form.html', context)
 
 def product_update_view(request, product_id):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
-
-    if not auth_token:
-        messages.error(request, 'Debes iniciar sesión para editar un producto.')
-        return redirect('portal:login')
-
+    if not auth_token: return redirect('portal:login')
     fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return redirect('portal:dashboard')
-
-    api_product_url = f"{fastapi_base_url}/products/{product_id}/"
+    api_url = f"{fastapi_base_url}/products/{product_id}/"
     headers = {'Authorization': f'Bearer {auth_token}'}
-    form_kwargs = {'api_auth_token': auth_token}
-    
-    # Obtener datos del producto para pre-rellenar el formulario (si es GET)
-    # o para tener una instancia base si el POST falla la validación
-    product_instance_data = None
-    try:
-        response_get = requests.get(api_product_url, headers=headers)
-        response_get.raise_for_status()
-        product_instance_data = response_get.json()
-    except requests.exceptions.RequestException as e:
-        messages.error(request, f"No se pudo obtener el producto a editar: {e}")
-        return redirect('portal:dashboard')
-    except Exception as e: # Captura cualquier otro error, como JSONDecodeError si la respuesta no es JSON
-        messages.error(request, f"Error inesperado al obtener producto para editar: {e}")
-        return redirect('portal:dashboard')
+    product_name_for_title = f"ID {product_id}" # Fallback para el título
 
-    if not product_instance_data: # Doble chequeo
-        messages.error(request, f"Producto con ID {product_id} no encontrado para editar.")
+    # Obtener datos del producto para el título y para rellenar el form en GET
+    try:
+        response_get_initial = requests.get(api_url, headers=headers)
+        response_get_initial.raise_for_status()
+        product_initial_data_api = response_get_initial.json()
+        product_name_for_title = product_initial_data_api.get('name', product_name_for_title)
+    except Exception as e:
+        messages.error(request, f"Error cargando datos del producto para editar: {e}")
         return redirect('portal:dashboard')
 
     if request.method == 'POST':
-        form = ProductForm(request.POST, **form_kwargs) # Validar los datos enviados
+        form = ProductForm(request.POST)
         if form.is_valid():
-            product_data_to_send = form.cleaned_data.copy()
-
-            if not product_data_to_send.get('category_id'):
-                product_data_to_send['category_id'] = None
-            else:
-                try:
-                    product_data_to_send['category_id'] = int(product_data_to_send['category_id'])
-                except (ValueError, TypeError):
-                    product_data_to_send['category_id'] = None
+            data = form.cleaned_data.copy()
+            if not data.get('category_id'): 
+                data['category_id'] = None
             
-            if 'price' in product_data_to_send and product_data_to_send['price'] is not None:
-                 product_data_to_send['price'] = float(product_data_to_send['price'])
+            # Convertir Decimal a float para JSON serializable
+            if data.get('price') is not None:
+                data['price'] = float(data['price']) # <--- CORRECCIÓN
             else:
-                product_data_to_send.pop('price', None)
+                data.pop('price', None)
             
-            # La API PUT espera todos los campos que se pueden modificar,
-            # pero nuestro ProductUpdate schema en FastAPI permite campos opcionales.
-            # Solo enviamos lo que está en el cleaned_data del formulario.
-            # Si la API FastAPI usa un schema PATCH-like para PUT, esto funcionará bien.
-            # Si la API FastAPI espera TODOS los campos en PUT, entonces necesitaríamos
-            # fusionar product_instance_data con product_data_to_send aquí.
-            # Por ahora, asumimos que la API maneja actualizaciones parciales en PUT.
-
             try:
-                response_put = requests.put(api_product_url, json=product_data_to_send, headers=headers)
-                response_put.raise_for_status()
-                
-                updated_product_api_response = response_put.json()
-                messages.success(request, f"Producto '{updated_product_api_response.get('name')}' actualizado exitosamente.")
-                return redirect('portal:product_detail', product_id=product_id) # Redirigir al detalle del producto actualizado
-
-            except requests.exceptions.HTTPError as e_http:
-                error_message = "Error al actualizar el producto en la API."
-                # (Mismo manejo de errores que en create_view)
-                if e_http.response is not None:
-                    try:
-                        api_error_details = e_http.response.json().get('detail')
-                        if isinstance(api_error_details, list):
-                            readable_errors = []
-                            for error_item in api_error_details:
-                                loc = " -> ".join(map(str, error_item.get('loc', ['body'])))
-                                msg = error_item.get('msg', 'Error desconocido')
-                                readable_errors.append(f"Campo '{loc}': {msg}")
-                            error_message = "Error de validación de la API: " + "; ".join(readable_errors)
-                        elif isinstance(api_error_details, str):
-                             error_message = f"Error de API: {api_error_details}"
+                response = requests.put(api_url, json=data, headers=headers)
+                response.raise_for_status()
+                messages.success(request, f"Producto '{response.json().get('name')}' actualizado.")
+                return redirect('portal:product_detail', product_id=product_id)
+            except requests.exceptions.HTTPError as e:
+                error_detail = "Error API actualizando producto."
+                if e.response is not None:
+                    try: 
+                        detail = e.response.json().get('detail')
+                        if isinstance(detail, list): 
+                            readable_errors = [f"Campo {' -> '.join(map(str, err.get('loc',[])))}: {err.get('msg','')}" for err in detail]
+                            error_detail = "Errores de validación: " + "; ".join(readable_errors)
+                        elif isinstance(detail, str):
+                            error_detail = detail
                         else:
-                            error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
-                    except requests.exceptions.JSONDecodeError:
-                        error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
-                messages.error(request, error_message)
-            except requests.exceptions.RequestException as e_req:
-                messages.error(request, f"Error de red al actualizar el producto: {e_req}")
-            except Exception as e_gen:
-                messages.error(request, f"Un error inesperado ocurrió actualizando producto: {e_gen}")
-            # Si hay error, el 'form' ya está poblado con request.POST, se volverá a renderizar
+                             error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                    except: error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                messages.error(request, error_detail)
+            except Exception as e: messages.error(request, f"Error inesperado: {e}")
+        else: 
+            messages.error(request, "Formulario inválido. Por favor, revisa los campos.")
+            # product_name_for_title ya se obtuvo antes del bloque POST
     else: # Petición GET
-        # Pre-rellenar el formulario con los datos del producto existente
-        # Asegurarse de que los nombres de los campos coincidan con los del ProductForm
-        initial_data = {
-            'name': product_instance_data.get('name'),
-            'description': product_instance_data.get('description'),
-            'price': product_instance_data.get('price'),
-            'stock_actual': product_instance_data.get('stock_actual'),
-            'stock_minimo': product_instance_data.get('stock_minimo'),
-            'codigo_sku': product_instance_data.get('codigo_sku'),
-            'numero_serie': product_instance_data.get('numero_serie'),
-            'category_id': product_instance_data.get('category', {}).get('id') if product_instance_data.get('category') else None
+        # product_initial_data_api ya se obtuvo antes
+        initial_form_data = {
+            'name': product_initial_data_api.get('name'), 
+            'description': product_initial_data_api.get('description'),
+            'price': product_initial_data_api.get('price'), 
+            'stock_actual': product_initial_data_api.get('stock_actual'),
+            'stock_minimo': product_initial_data_api.get('stock_minimo'), 
+            'codigo_sku': product_initial_data_api.get('codigo_sku'),
+            'numero_serie': product_initial_data_api.get('numero_serie'),
+            'category_id': product_initial_data_api.get('category', {}).get('id') if product_initial_data_api.get('category') else None
         }
-        form = ProductForm(initial=initial_data, **form_kwargs)
-
+        form = ProductForm(initial=initial_form_data)
+    
     context = {
-        'form': form,
-        'is_editing': True, # Para la plantilla, indicar que es edición
-        'product_id': product_id, # Para la URL del action del form si es necesario, o para título
+        'form': form, 'is_editing': True, 'product_id': product_id, 
+        'form_title': f"Editar: {product_name_for_title}",
         'current_username': current_username
     }
     return render(request, 'portal/product_form.html', context)
 
 def product_delete_view(request, product_id):
     auth_token = request.session.get('auth_token')
-    current_username = request.session.get('username') # Para pasarlo a la plantilla si es necesario
-
-    if not auth_token:
-        messages.error(request, 'Debes iniciar sesión para eliminar un producto.')
-        return redirect('portal:login')
-
+    current_username = request.session.get('username')
+    if not auth_token: return redirect('portal:login')
     fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return redirect('portal:dashboard')
-
-    api_product_url = f"{fastapi_base_url}/products/{product_id}/"
+    api_url = f"{fastapi_base_url}/products/{product_id}/"
     headers = {'Authorization': f'Bearer {auth_token}'}
-    
-    product_to_delete = None
-    api_error_message = None
-
-    # Primero, obtener el producto para mostrar su nombre en la confirmación
-    try:
-        response_get = requests.get(api_product_url, headers=headers)
-        response_get.raise_for_status()
-        product_to_delete = response_get.json()
-    except requests.exceptions.HTTPError as e_http:
-        # ... (Manejo de errores similar a product_detail_view para GET) ...
-        if e_http.response is not None:
-            if e_http.response.status_code == 401: # Sesión expirada o inválida
-                messages.error(request, "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
-                if 'auth_token' in request.session: del request.session['auth_token']
-                if 'username' in request.session: del request.session['username']
-                return redirect('portal:login')
-            elif e_http.response.status_code == 404:
-                messages.error(request, f"Producto con ID {product_id} no encontrado para eliminar.")
-            else:
-                messages.error(request, f"Error ({e_http.response.status_code}) al obtener el producto para eliminar.")
-        else:
-            messages.error(request, "Error de HTTP sin respuesta al obtener producto.")
-        return redirect('portal:dashboard') # Redirigir si no se puede obtener el producto
-    except requests.exceptions.RequestException:
-        messages.error(request, "Error de red al intentar obtener el producto para eliminar.")
+    item_to_delete = None
+    try: 
+        response = requests.get(api_url, headers=headers)
+        response.raise_for_status()
+        item_to_delete = response.json()
+    except Exception as e:
+        messages.error(request, f"Error obteniendo producto para eliminar: {e}")
         return redirect('portal:dashboard')
-
-    if not product_to_delete: # Doble chequeo por si acaso
-         messages.error(request, f"No se pudo encontrar el producto con ID {product_id}.")
-         return redirect('portal:dashboard')
 
     if request.method == 'POST':
-        # El usuario ha confirmado la eliminación
         try:
-            response_delete = requests.delete(api_product_url, headers=headers)
-            response_delete.raise_for_status() # Lanza error para 4xx/5xx
-
-            # Si la API devuelve el objeto eliminado (como lo configuramos):
-            # deleted_product_name = response_delete.json().get('name', 'el producto')
-            # messages.success(request, f"Producto '{deleted_product_name}' eliminado exitosamente.")
-            # O si es 204 No Content:
-            messages.success(request, f"Producto '{product_to_delete.get('name', 'ID '+str(product_id))}' eliminado exitosamente.")
+            response_del = requests.delete(api_url, headers=headers)
+            response_del.raise_for_status()
+            messages.success(request, f"Producto '{item_to_delete.get('name', product_id)}' eliminado.")
             return redirect('portal:dashboard')
+        except Exception as e:
+            error_detail = "Error API eliminando producto."
+            if hasattr(e, 'response') and e.response is not None:
+                try: error_detail = e.response.json().get('detail', f"Error ({e.response.status_code})")
+                except: error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+            else: error_detail = str(e)
+            messages.error(request, error_detail)
+            return redirect('portal:product_detail', product_id=product_id) if item_to_delete else redirect('portal:dashboard')
 
-        except requests.exceptions.HTTPError as e_http:
-            error_message = "Error al eliminar el producto en la API."
-            if e_http.response is not None:
-                try:
-                    api_error_details = e_http.response.json().get('detail')
-                    if isinstance(api_error_details, str):
-                        error_message = f"Error de API: {api_error_details}"
-                    else: # Error 500 o no JSON
-                        error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
-                except requests.exceptions.JSONDecodeError:
-                    error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
-            messages.error(request, error_message)
-            # Volver a la página de confirmación o al dashboard
-            return redirect('portal:product_detail', product_id=product_id) 
-        except requests.exceptions.RequestException as e_req:
-            messages.error(request, f"Error de red al eliminar el producto: {e_req}")
-            return redirect('portal:product_detail', product_id=product_id)
-        except Exception as e_gen:
-            messages.error(request, f"Un error inesperado ocurrió al eliminar el producto: {e_gen}")
-            return redirect('portal:product_detail', product_id=product_id)
-    
-    # Si es una petición GET, mostrar la página de confirmación
     context = {
-        'product': product_to_delete,
-        'current_username': current_username
+        'item': item_to_delete, 'item_type': 'Producto', 'current_username': current_username,
+        'cancel_url_info': {'name': 'portal:product_detail', 'pk': product_id} if item_to_delete else {'name': 'portal:dashboard'}
     }
-    return render(request, 'portal/product_confirm_delete.html', context)
+    return render(request, 'portal/confirm_delete.html', context)
+
+# --- CRUD CATEGORÍAS ---
+def category_list_view(request):
+    auth_token = request.session.get('auth_token')
+    current_username = request.session.get('username')
+    if not auth_token: return redirect('portal:login')
+    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
+    api_url = f"{fastapi_base_url}/categories/"
+    headers = {'Authorization': f'Bearer {auth_token}'} 
+    categories, api_error_message = [], None # Renombrado error a api_error_message
+    try:
+        response = requests.get(api_url, headers=headers, params={'limit': 100})
+        response.raise_for_status()
+        categories = response.json()
+    except Exception as e:
+        api_error_message = f"Error obteniendo categorías: {e}"
+        if hasattr(e, 'response') and e.response is not None:
+                try: api_error_message = e.response.json().get('detail', f"Error ({e.response.status_code})")
+                except: api_error_message = f"Error ({e.response.status_code}): {e.response.text}"
+        messages.error(request, api_error_message)
+    context = {'categories': categories, 'api_error': api_error_message, 'current_username': current_username}
+    return render(request, 'portal/category_list.html', context)
 
 def category_create_view(request):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
-
-    if not auth_token:
-        messages.error(request, 'Debes iniciar sesión para añadir una categoría.')
-        return redirect('portal:login')
-
+    if not auth_token: return redirect('portal:login')
     fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return redirect('portal:dashboard') # O a una página de error de configuración
-
-    api_categories_url = f"{fastapi_base_url}/categories/"
+    api_url = f"{fastapi_base_url}/categories/"
     headers = {'Authorization': f'Bearer {auth_token}'}
-
     if request.method == 'POST':
         form = CategoryForm(request.POST)
         if form.is_valid():
-            category_data_to_send = form.cleaned_data.copy()
             try:
-                response = requests.post(api_categories_url, json=category_data_to_send, headers=headers)
+                response = requests.post(api_url, json=form.cleaned_data, headers=headers)
                 response.raise_for_status()
-                
-                new_category_api_response = response.json()
-                messages.success(request, f"Categoría '{new_category_api_response.get('name')}' creada exitosamente.")
-                # Podríamos redirigir a una lista de categorías o al dashboard
-                return redirect('portal:dashboard') 
-
-            except requests.exceptions.HTTPError as e_http:
-                error_message = "Error al crear la categoría en la API."
-                if e_http.response is not None:
-                    try:
-                        api_error_details = e_http.response.json().get('detail')
-                        if isinstance(api_error_details, list): # Errores de validación Pydantic
-                            readable_errors = []
-                            for error_item in api_error_details:
-                                loc = " -> ".join(map(str, error_item.get('loc', ['body'])))
-                                msg = error_item.get('msg', 'Error desconocido')
-                                readable_errors.append(f"Campo '{loc}': {msg}")
-                            error_message = "Error de validación de la API: " + "; ".join(readable_errors)
-                        elif isinstance(api_error_details, str): # Otros errores de la API (ej: nombre duplicado)
-                             error_message = f"Error de API: {api_error_details}"
+                messages.success(request, f"Categoría '{response.json().get('name')}' creada.")
+                return redirect('portal:category_list')
+            except requests.exceptions.HTTPError as e:
+                error_detail = "Error API creando categoría."
+                # ... (manejo de errores detallado) ...
+                if e.response is not None:
+                    try: 
+                        detail = e.response.json().get('detail')
+                        if isinstance(detail, list): 
+                            readable_errors = [f"Campo {' -> '.join(map(str, err.get('loc',[])))}: {err.get('msg','')}" for err in detail]
+                            error_detail = "Errores de validación: " + "; ".join(readable_errors)
+                        elif isinstance(detail, str):
+                            error_detail = detail
                         else:
-                            error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
-                    except requests.exceptions.JSONDecodeError:
-                        error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
-                messages.error(request, error_message)
-            except requests.exceptions.RequestException as e_req:
-                messages.error(request, f"Error de red al crear la categoría: {e_req}")
-            except Exception as e_gen:
-                messages.error(request, f"Un error inesperado ocurrió creando la categoría: {e_gen}")
-            # Si hay error, el 'form' ya está poblado con request.POST, se volverá a renderizar
-    else: # Petición GET
-        form = CategoryForm()
-
-    context = {
-        'form': form,
-        'form_title': 'Añadir Nueva Categoría', # Para la plantilla
-        'current_username': current_username
-    }
-    # Reutilizaremos la plantilla product_form.html para categorías por simplicidad,
-    # o podrías crear una category_form.html muy similar.
-    return render(request, 'portal/category_form.html', context) # Usaremos una nueva plantilla
-
-def category_list_view(request):
-    auth_token = request.session.get('auth_token')
-    current_username = request.session.get('username')
-
-    # Aunque el GET de categorías es público, verificamos el token
-    # para mantener un flujo consistente para las páginas de gestión.
-    if not auth_token:
-        messages.warning(request, 'Por favor, inicia sesión para ver las categorías.')
-        return redirect('portal:login')
-
-    fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return render(request, 'portal/category_list.html', {
-            'current_username': current_username,
-            'categories': [],
-            'api_error': "Error de configuración interna (URL de API no encontrada)."
-        })
-
-    api_categories_url = f"{fastapi_base_url}/categories/"
-    headers = {'Authorization': f'Bearer {auth_token}'} # Enviamos token por si se protege en el futuro
-    
-    categories_list = []
-    api_error_message = None
-
-    try:
-        # Podríamos añadir paginación aquí también con params={'skip': ..., 'limit': ...}
-        response = requests.get(api_categories_url, headers=headers, params={'limit': 500}) # Traer bastantes
-        response.raise_for_status()
-        categories_list = response.json()
-    except requests.exceptions.HTTPError as e_http:
-        # ... (Manejo de errores similar al de dashboard_view o product_detail_view) ...
-        if e_http.response is not None:
-            if e_http.response.status_code == 401:
-                api_error_message = "Tu sesión ha expirado. Por favor, inicia sesión de nuevo."
-                if 'auth_token' in request.session: del request.session['auth_token']
-                if 'username' in request.session: del request.session['username']
-                messages.error(request, api_error_message)
-                return redirect('portal:login')
-            else:
-                api_error_message = f"Error ({e_http.response.status_code}) al obtener las categorías."
+                             error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                    except: error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                messages.error(request, error_detail)
+            except Exception as e: messages.error(request, f"Error inesperado: {e}")
         else:
-            api_error_message = "Error de HTTP sin respuesta al obtener categorías."
-        messages.error(request, api_error_message)
-    except requests.exceptions.RequestException as e_req:
-        api_error_message = f"Error de red al obtener categorías: {e_req}"
-        messages.error(request, api_error_message)
-    except Exception as e_gen:
-        api_error_message = f"Un error inesperado ocurrió: {e_gen}"
-        messages.error(request, api_error_message)
-
-    context = {
-        'categories': categories_list,
-        'current_username': current_username,
-        'api_error': api_error_message
-    }
-    return render(request, 'portal/category_list.html', context)
+            messages.error(request, "Formulario inválido. Por favor, revisa los campos.")
+    else: form = CategoryForm()
+    context = {'form': form, 'is_editing': False, 'form_title': "Crear Categoría", 'current_username': current_username}
+    return render(request, 'portal/category_form.html', context)
 
 def category_update_view(request, category_id):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
-
-    if not auth_token:
-        messages.error(request, 'Debes iniciar sesión para editar una categoría.')
-        return redirect('portal:login')
-
+    if not auth_token: return redirect('portal:login')
     fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return redirect('portal:category_list')
-
-    api_category_url = f"{fastapi_base_url}/categories/{category_id}/"
+    api_url = f"{fastapi_base_url}/categories/{category_id}/"
     headers = {'Authorization': f'Bearer {auth_token}'}
-    
-    category_instance_data = None
-    try:
-        response_get = requests.get(api_category_url, headers=headers)
-        response_get.raise_for_status()
-        category_instance_data = response_get.json()
-    except requests.exceptions.HTTPError as e_http:
-        if e_http.response.status_code == 401:
-            messages.error(request, "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
-            if 'auth_token' in request.session: del request.session['auth_token']
-            if 'username' in request.session: del request.session['username']
-            return redirect('portal:login')
-        elif e_http.response.status_code == 404:
-            messages.error(request, f"Categoría con ID {category_id} no encontrada para editar.")
-        else:
-            messages.error(request, f"Error ({e_http.response.status_code}) al obtener la categoría para editar.")
-        return redirect('portal:category_list')
-    except requests.exceptions.RequestException as e:
-        messages.error(request, f"No se pudo obtener la categoría a editar: {e}")
-        return redirect('portal:category_list')
-    except Exception as e: 
-        messages.error(request, f"Error inesperado al obtener categoría para editar: {e}")
-        return redirect('portal:category_list')
+    category_name_for_title = f"ID {category_id}" # Fallback
 
-    if not category_instance_data:
-        messages.error(request, f"Categoría con ID {category_id} no encontrada para editar (después de la petición).")
+    try:
+        response_get_initial = requests.get(api_url, headers=headers)
+        response_get_initial.raise_for_status()
+        category_initial_data_api = response_get_initial.json()
+        category_name_for_title = category_initial_data_api.get('name', category_name_for_title)
+    except Exception as e:
+        messages.error(request, f"Error cargando datos de la categoría para editar: {e}")
         return redirect('portal:category_list')
 
     if request.method == 'POST':
-        form = CategoryForm(request.POST) # Validar los datos enviados
+        form = CategoryForm(request.POST)
         if form.is_valid():
-            category_data_to_send = form.cleaned_data.copy()
             try:
-                response_put = requests.put(api_category_url, json=category_data_to_send, headers=headers)
-                response_put.raise_for_status()
-                
-                updated_category_api_response = response_put.json()
-                messages.success(request, f"Categoría '{updated_category_api_response.get('name')}' actualizada exitosamente.")
+                response = requests.put(api_url, json=form.cleaned_data, headers=headers)
+                response.raise_for_status()
+                messages.success(request, f"Categoría '{response.json().get('name')}' actualizada.")
                 return redirect('portal:category_list')
-
-            except requests.exceptions.HTTPError as e_http:
-                error_message = "Error al actualizar la categoría en la API."
-                # (Mismo manejo de errores de API que en category_create_view)
-                if e_http.response is not None:
-                    try:
-                        api_error_details = e_http.response.json().get('detail')
-                        if isinstance(api_error_details, list):
-                            readable_errors = []
-                            for error_item in api_error_details:
-                                loc = " -> ".join(map(str, error_item.get('loc', ['body'])))
-                                msg = error_item.get('msg', 'Error desconocido')
-                                readable_errors.append(f"Campo '{loc}': {msg}")
-                            error_message = "Error de validación de la API: " + "; ".join(readable_errors)
-                        elif isinstance(api_error_details, str):
-                             error_message = f"Error de API: {api_error_details}"
+            except requests.exceptions.HTTPError as e:
+                error_detail = "Error API actualizando categoría."
+                # ... (manejo de errores detallado) ...
+                if e.response is not None:
+                    try: 
+                        detail = e.response.json().get('detail')
+                        if isinstance(detail, list): 
+                            readable_errors = [f"Campo {' -> '.join(map(str, err.get('loc',[])))}: {err.get('msg','')}" for err in detail]
+                            error_detail = "Errores de validación: " + "; ".join(readable_errors)
+                        elif isinstance(detail, str):
+                            error_detail = detail
                         else:
-                            error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
-                    except requests.exceptions.JSONDecodeError:
-                        error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
-                messages.error(request, error_message)
-            except requests.exceptions.RequestException as e_req:
-                messages.error(request, f"Error de red al actualizar la categoría: {e_req}")
-            except Exception as e_gen:
-                messages.error(request, f"Un error inesperado ocurrió actualizando la categoría: {e_gen}")
-    else: # Petición GET
-        initial_data = {
-            'name': category_instance_data.get('name'),
-            'description': category_instance_data.get('description'),
-        }
-        form = CategoryForm(initial=initial_data)
-
+                             error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                    except: error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+                messages.error(request, error_detail)
+            except Exception as e: messages.error(request, f"Error inesperado: {e}")
+        else:
+            messages.error(request, "Formulario inválido. Por favor, revisa los campos.")
+            # category_name_for_title ya está definida
+    else: # GET
+        form = CategoryForm(initial=category_initial_data_api)
+    
     context = {
-        'form': form,
-        'form_title': f"Editar Categoría: {category_instance_data.get('name', '')}",
-        'is_editing': True, 
-        'category_id': category_id, 
+        'form': form, 'is_editing': True, 'category_id': category_id, 
+        'form_title': f"Editar: {category_name_for_title}",
         'current_username': current_username
     }
     return render(request, 'portal/category_form.html', context)
@@ -686,86 +380,36 @@ def category_update_view(request, category_id):
 def category_delete_view(request, category_id):
     auth_token = request.session.get('auth_token')
     current_username = request.session.get('username')
-
-    if not auth_token:
-        messages.error(request, 'Debes iniciar sesión para eliminar una categoría.')
-        return redirect('portal:login')
-
+    if not auth_token: return redirect('portal:login')
     fastapi_base_url = os.getenv('FASTAPI_BASE_URL')
-    if not fastapi_base_url:
-        messages.error(request, "Error de configuración: URL de la API no definida.")
-        return redirect('portal:category_list')
-
-    api_category_url = f"{fastapi_base_url}/categories/{category_id}/"
+    api_url = f"{fastapi_base_url}/categories/{category_id}/"
     headers = {'Authorization': f'Bearer {auth_token}'}
-    
-    category_to_delete = None
-    # Fetch category details first, for both GET (confirmation page) and POST (success message name)
+    item_to_delete = None
     try:
-        response_get = requests.get(api_category_url, headers=headers)
-        response_get.raise_for_status()
-        category_to_delete = response_get.json()
-    except requests.exceptions.HTTPError as e_http:
-            if e_http.response.status_code == 401:
-                messages.error(request, "Tu sesión ha expirado. Por favor, inicia sesión de nuevo.")
-                if 'auth_token' in request.session: del request.session['auth_token']
-                if 'username' in request.session: del request.session['username']
-                return redirect('portal:login')
-            elif e_http.response.status_code == 404:
-                messages.error(request, f"Categoría con ID {category_id} no encontrada para eliminar.")
-            else: # Otros errores HTTP al obtener la categoría
-                messages.error(request, f"Error ({e_http.response.status_code}) al obtener la categoría.")
-            return redirect('portal:category_list')
-    except requests.exceptions.RequestException:
-        messages.error(request, "Error de red al intentar obtener la categoría.")
-        return redirect('portal:category_list')
-    except Exception as e: # Captura otros errores como JSONDecodeError
-        messages.error(request, f"Error inesperado al obtener la categoría: {e}")
+        response = requests.get(api_url, headers=headers)
+        response.raise_for_status()
+        item_to_delete = response.json()
+    except Exception as e:
+        messages.error(request, f"Error obteniendo categoría para eliminar: {e}")
         return redirect('portal:category_list')
 
-    if not category_to_delete: # Debería ser capturado por las excepciones, pero como salvaguarda
-         messages.error(request, f"No se pudo encontrar la categoría con ID {category_id} para procesar la eliminación.")
-         return redirect('portal:category_list')
-
-    if request.method == 'POST': # Confirmación de eliminación
+    if request.method == 'POST':
         try:
-            response_delete = requests.delete(api_category_url, headers=headers)
-            response_delete.raise_for_status() 
-            
-            # Usar el nombre de category_to_delete (obtenido antes) para el mensaje.
-            # Esto funciona incluso si la API devuelve 204 No Content en DELETE.
-            category_name_display = category_to_delete.get('name', f"ID {category_id}")
-            
-            messages.success(request, f"Categoría '{category_name_display}' eliminada exitosamente.")
+            response_del = requests.delete(api_url, headers=headers)
+            response_del.raise_for_status()
+            messages.success(request, f"Categoría '{item_to_delete.get('name', category_id)}' eliminada.")
+            return redirect('portal:category_list')
+        except Exception as e:
+            error_detail = "Error API eliminando categoría."
+            if hasattr(e, 'response') and e.response is not None:
+                try: error_detail = e.response.json().get('detail', f"Error ({e.response.status_code})")
+                except: error_detail = f"Error ({e.response.status_code}): {e.response.text}"
+            else: error_detail = str(e)
+            messages.error(request, error_detail)
             return redirect('portal:category_list')
 
-        except requests.exceptions.HTTPError as e_http:
-            error_message = "Error al eliminar la categoría en la API."
-            # (Manejo similar a product_delete_view)
-            if e_http.response is not None:
-                try:
-                    api_error_details = e_http.response.json().get('detail')
-                    if isinstance(api_error_details, str):
-                        error_message = f"Error de API: {api_error_details}"
-                    else: 
-                        error_message = f"Error de API ({e_http.response.status_code}): {e_http.response.text}"
-                except requests.exceptions.JSONDecodeError:
-                    error_message = f"Error de API ({e_http.response.status_code}): Respuesta no es JSON válido."
-            messages.error(request, error_message)
-            return redirect('portal:category_list') 
-        except requests.exceptions.RequestException as e_req:
-            messages.error(request, f"Error de red al eliminar la categoría: {e_req}")
-            return redirect('portal:category_list')
-        except Exception as e_gen:
-            messages.error(request, f"Un error inesperado ocurrió al eliminar la categoría: {e_gen}")
-            return redirect('portal:category_list')
-    
-    # Si es una petición GET, mostrar la página de confirmación
     context = {
-        'item': category_to_delete, # Nombre genérico 'item' para reutilizar plantilla
-        'item_type': 'Categoría',   # Para el mensaje de confirmación
-        'current_username': current_username,
-        'cancel_url_name': 'portal:category_list' # Para el botón "Cancelar"
+        'item': item_to_delete, 'item_type': 'Categoría', 'current_username': current_username,
+        'cancel_url_info': {'name': 'portal:category_list'}
     }
-    # Usaremos una plantilla de confirmación genérica 'confirm_delete.html'
     return render(request, 'portal/confirm_delete.html', context)
