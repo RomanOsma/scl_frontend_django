@@ -58,3 +58,4 @@ Frontend para el sistema de gestión de inventario SCL. Consume la API del backe
 7.  **Acceder a la Aplicación:**
     *   Abre tu navegador y ve a `http://127.0.0.1:8001/`.
     *   Deberías ser redirigido a la página de login: `http://127.0.0.1:8001/portal/login/`.
+    
