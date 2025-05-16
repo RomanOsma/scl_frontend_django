@@ -4,39 +4,59 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-dotenv_path = BASE_DIR / '.env' # Para desarrollo local
+dotenv_path = BASE_DIR / '.env'
 if os.path.exists(dotenv_path):
     load_dotenv(dotenv_path)
     print(f"INFO: Archivo .env cargado desde: {dotenv_path}")
+else:
+    print(f"ADVERTENCIA: No se encontró .env en {dotenv_path} (esperado en producción si las variables están en el entorno de Railway).")
 
-SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'una_clave_secreta_de_fallback_solo_para_desarrollo_local_cambiar_en_produccion')
-DEBUG_ENV_VALUE = os.getenv('DJANGO_DEBUG', 'False').lower() # Por defecto False para producción
+# SECRET_KEY - Lee de DJANGO_SECRET_KEY
+SECRET_KEY = os.getenv(
+    'DJANGO_SECRET_KEY', 
+    'django-insecure-fallback-key-for-dev-if-not-in-env-CHANGE-ME' 
+)
+if SECRET_KEY == 'django-insecure-fallback-key-for-dev-if-not-in-env-CHANGE-ME':
+    print("ADVERTENCIA: Usando SECRET_KEY de fallback. ¡Configúrala en .env o variables de entorno de producción!")
+
+# DEBUG - Lee de DJANGO_DEBUG
+DEBUG_ENV_VALUE = os.getenv('DJANGO_DEBUG', 'False').lower() # Por defecto 'False' si no está definida
 DEBUG = DEBUG_ENV_VALUE in ['true', '1', 't', 'yes']
 
+if DEBUG:
+    print("INFO (settings.py): DEBUG está ACTIVADO.")
+else:
+    print("INFO (settings.py): DEBUG está DESACTIVADO (producción).")
+
+# ALLOWED_HOSTS - Lee de DJANGO_ALLOWED_HOSTS
 ALLOWED_HOSTS_STRING = os.getenv('DJANGO_ALLOWED_HOSTS')
 if ALLOWED_HOSTS_STRING:
     ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS_STRING.split(',')]
-elif DEBUG:
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
-else: # DEBUG es False y no hay variable de entorno
-    ALLOWED_HOSTS = [] # Esto fallará en producción si no se setea la variable, lo cual es bueno.
+else:
+    if DEBUG: # Si DJANGO_ALLOWED_HOSTS no está, pero DEBUG es True (localmente)
+        ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+    else: # Si DJANGO_ALLOWED_HOSTS no está y DEBUG es False (producción)
+        ALLOWED_HOSTS = [] # Esto causará error si no se configura en Railway, lo cual es bueno
 
-print(f"INFO (settings.py): DEBUG = {DEBUG}")
 print(f"INFO (settings.py): ALLOWED_HOSTS = {ALLOWED_HOSTS}")
 
-# Reemplaza esto con tu dominio real de Railway para el frontend
-PUBLIC_RAILWAY_FRONTEND_DOMAIN = 'sclfrontenddjango-production.up.railway.app' 
+# CSRF_TRUSTED_ORIGINS - Lee de DJANGO_CSRF_TRUSTED_ORIGINS
+# Reemplaza 'tu-dominio-frontend.up.railway.app' con tu dominio real de Railway para el frontend
+DEFAULT_RAILWAY_FRONTEND_DOMAIN = 'sclfrontenddjango-production.up.railway.app' 
 
-CSRF_TRUSTED_ORIGINS_ENV = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS')
-if CSRF_TRUSTED_ORIGINS_ENV:
-    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_ENV.split(',')]
+CSRF_TRUSTED_ORIGINS_STRING = os.getenv('DJANGO_CSRF_TRUSTED_ORIGINS')
+if CSRF_TRUSTED_ORIGINS_STRING:
+    CSRF_TRUSTED_ORIGINS = [origin.strip() for origin in CSRF_TRUSTED_ORIGINS_STRING.split(',')]
 else:
-    CSRF_TRUSTED_ORIGINS = [f"https://{PUBLIC_RAILWAY_FRONTEND_DOMAIN}"]
-    if DEBUG: # Para desarrollo local, añade http y localhost si es necesario
-        CSRF_TRUSTED_ORIGINS.extend([f"http://{PUBLIC_RAILWAY_FRONTEND_DOMAIN}", 'http://127.0.0.1:8001', 'http://localhost:8001'])
+    # Valores por defecto si la variable de entorno no está
+    CSRF_TRUSTED_ORIGINS = [f"https://{DEFAULT_RAILWAY_FRONTEND_DOMAIN}"] # Para producción
+    if DEBUG: # Para desarrollo local, añadir http y localhost
+        CSRF_TRUSTED_ORIGINS.extend(['http://127.0.0.1:8001', 'http://localhost:8001'])
+        # No necesitas añadir el de Railway con http si DEBUG=True, ya que no estarás accediendo a él así
 
 print(f"INFO (settings.py): CSRF_TRUSTED_ORIGINS = {CSRF_TRUSTED_ORIGINS}")
 
+# Configuraciones SECURE_* (solo si no estás en DEBUG)
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = True
@@ -51,7 +71,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'whitenoise.runserver_nostatic', # Para servir estáticos con runserver si DEBUG=False
+    'whitenoise.runserver_nostatic', # Útil para probar estáticos con runserver y DEBUG=False
     'django.contrib.staticfiles',
 ]
 MIDDLEWARE = [
