@@ -1,3 +1,7 @@
+# SCL Inventory - Wiki
+
+https://deepwiki.com/RomanOsma/scl_frontend_django
+
 # SCL Inventory - Frontend (Django)
 
 Frontend desarrollado con Django para interactuar con el sistema de gestión de inventario SCL. Este proyecto consume la API proporcionada por el backend `scl_backend_fastapi`.
