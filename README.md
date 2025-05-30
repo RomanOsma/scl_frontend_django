@@ -1,12 +1,97 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/RomanOsma/scl_frontend_django)
-<a href="https://deepwiki.com/RomanOsma/scl_frontend_django"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
-# SCL Inventory - Wiki
-
-https://deepwiki.com/RomanOsma/scl_frontend_django
 
 # SCL Inventory - Frontend (Django)
 
+[Ver Documentación Completa](https://deepwiki.com/RomanOsma/scl_frontend_django)
+
+## 📋 Descripción del Proyecto
+
 Frontend desarrollado con Django para interactuar con el sistema de gestión de inventario SCL. Este proyecto consume la API proporcionada por el backend `scl_backend_fastapi`.
+
+### Tecnologías Principales
+- ![Django](https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white)
+- ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+- ![Bootstrap](https://img.shields.io/badge/Bootstrap-563D7C?style=for-the-badge&logo=bootstrap&logoColor=white)
+- ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white)
+
+### Arquitectura del Sistema
+```mermaid
+graph TD
+    A[Usuario] -->|Navegador| B[Django Frontend]
+    B -->|HTTP| C[FastAPI Backend]
+    B -->|Template Engine| D[Templates Django]
+    B -->|Sesiones| E[SQLite]
+```
+
+## 🚀 Características Principales
+
+- ✨ Interfaz de usuario moderna y responsiva
+- 🔐 Autenticación integrada con backend
+- 📦 Gestión de productos y categorías
+- 🏢 Administración de proveedores
+- 📊 Visualización de movimientos de inventario
+- 🎨 Diseño con Bootstrap 5
+- 📱 Diseño responsive
+
+## 🔄 Integración con Backend
+
+Este frontend se integra con el [Backend FastAPI](https://github.com/RomanOsma/scl_backend_fastapi) a través de su API REST. Es necesario tener el backend configurado y ejecutándose antes de usar el frontend.
+
+## 📱 Vistas Principales
+
+### Portal de Inventario
+```mermaid
+graph LR
+    A[Login] --> B[Dashboard]
+    B --> C[Productos]
+    B --> D[Categorías]
+    B --> E[Proveedores]
+    B --> F[Movimientos]
+```
+
+### Características de la Interfaz
+- 📊 Dashboard con resumen de inventario
+- 📦 Gestión de productos con imágenes
+- 📋 Listados con paginación y búsqueda
+- 📈 Gráficos de movimientos
+- 🔍 Filtros avanzados
+
+## 🚀 URL's Principales
+
+- `/portal/login/` - Inicio de sesión
+- `/portal/dashboard/` - Panel principal
+- `/portal/productos/` - Gestión de productos
+- `/portal/categorias/` - Gestión de categorías
+- `/portal/proveedores/` - Gestión de proveedores
+- `/portal/movimientos/` - Registro de movimientos
+
+## 📚 Documentación Adicional
+
+Para una documentación más detallada, incluyendo:
+- Guías de uso
+- Capturas de pantalla
+- Flujos de trabajo
+- Ejemplos de integración
+
+Visita nuestra [Wiki completa en DeepWiki](https://deepwiki.com/RomanOsma/scl_frontend_django)
+
+## 🔗 Proyectos Relacionados
+
+- [Backend FastAPI](https://github.com/RomanOsma/scl_backend_fastapi) - API REST del sistema
+- [Documentación Backend](https://deepwiki.com/RomanOsma/scl_backend_fastapi) - Wiki del backend
+
+## 🤝 Contribución
+
+Si deseas contribuir al proyecto, por favor:
+1. Haz fork del repositorio
+2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
+
+## 📝 Licencia
+
+Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para más detalles.
 
 ## Ejecución Local
 
